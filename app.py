@@ -18,42 +18,117 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+:root {
+    --primary-blue: #4361ee;
+    --secondary-purple: #7209b7;
+    --accent-teal: #4cc9f0;
+    --success-green: #38b000;
+    --warning-orange: #f48c06;
+    --danger-red: #d00000;
+    --light-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text-dark: #212529;
+    --text-muted: #6c757d;
+}
+
 .stApp {
-    background-color: #f1f3f4;
-    font-family: "Segoe UI", sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+    font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
 }
 
 .section {
-    background-color: #ffffff;
-    padding: 24px;
-    border-radius: 12px;
-    margin-bottom: 24px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    background: var(--card-bg);
+    padding: 28px;
+    border-radius: 16px;
+    margin-bottom: 28px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.section:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
 
 h1 {
-    color: #202124;
+    color: var(--text-dark);
+    font-weight: 700;
+    font-size: 2.5rem;
+    background: linear-gradient(90deg, var(--primary-blue), var(--secondary-purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 1.5rem;
 }
 
 h2, h3 {
-    color: #3c4043;
+    color: var(--text-dark);
+    font-weight: 600;
+    margin-bottom: 1rem;
 }
 
+/* Sidebar Enhancements */
+section[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #ffffff 0%, #f8f9fa 100%);
+    border-right: 1px solid rgba(0,0,0,0.05);
+}
+
+section[data-testid="stSidebar"] .stButton > button {
+    background: linear-gradient(90deg, var(--primary-blue), var(--secondary-purple));
+    border: none;
+    padding: 12px 24px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+section[data-testid="stSidebar"] .stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(67, 97, 238, 0.3);
+}
+
+/* Video list items in sidebar */
+div[data-testid="stCaptionContainer"] {
+    padding: 12px;
+    border-radius: 10px;
+    margin: 6px 0;
+    background: white;
+    border: 1px solid rgba(0,0,0,0.05);
+    transition: all 0.2s ease;
+}
+
+div[data-testid="stCaptionContainer"]:hover {
+    background: #f8f9fa;
+    border-color: var(--primary-blue);
+}
+
+/* Modern Tabs */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
-    background-color: #f8f9fa;
+    gap: 4px;
+    background: transparent;
     padding: 8px;
-    border-radius: 8px;
 }
 
 .stTabs [data-baseweb="tab"] {
-    border-radius: 6px;
-    padding: 12px 24px;
+    background: white;
+    border-radius: 10px;
+    padding: 14px 28px;
+    font-weight: 500;
+    border: 1px solid rgba(0,0,0,0.08);
+    margin: 0 2px;
+    transition: all 0.3s ease;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background: #f8f9fa;
+    transform: translateY(-2px);
 }
 
 .stTabs [aria-selected="true"] {
-    background-color: #1a73e8;
+    background: linear-gradient(90deg, var(--primary-blue), var(--secondary-purple));
     color: white !important;
+    border: none;
+    box-shadow: 0 4px 15px rgba(67, 97, 238, 0.2);
 }
 
 div[data-testid="metric-container"] {
@@ -63,24 +138,37 @@ div[data-testid="metric-container"] {
     box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-button {
-    background-color: #1a73e8;
-    color: white;
-    border-radius: 6px;
+/* Smooth transitions for interactive elements */
+button, .metric-card, .section, div[data-testid="stCaptionContainer"] {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.insight-box {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    padding: 20px;
-    border-radius: 12px;
-    margin: 15px 0;
+/* Fade-in animation for content */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.video-comparison {
-    border-left: 4px solid #1a73e8;
-    padding-left: 15px;
-    margin: 10px 0;
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .section {
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    h1 {
+        font-size: 2rem;
+    }
+    
+    .metric-card {
+        padding: 15px;
+    }
+}
+
+/* Custom spinner animation */
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -93,6 +181,20 @@ if 'video_data' not in st.session_state:
     st.session_state.video_data = {}
 if 'current_videos' not in st.session_state:
     st.session_state.current_videos = []
+
+# Custom Plotly template
+custom_template = go.layout.Template(
+    layout=go.Layout(
+        font=dict(family="Inter, Segoe UI, sans-serif"),
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        title=dict(font=dict(size=20, color='#212529')),
+        xaxis=dict(gridcolor='rgba(0,0,0,0.05)', title_font=dict(size=14)),
+        yaxis=dict(gridcolor='rgba(0,0,0,0.05)', title_font=dict(size=14)),
+        legend=dict(bgcolor='rgba(255,255,255,0.8)', bordercolor='rgba(0,0,0,0.1)'),
+        colorway=['#4361ee', '#7209b7', '#4cc9f0', '#38b000', '#f48c06', '#f72585']
+    )
+)
 
 # Utility Functions
 def extract_video_id(url):
@@ -303,7 +405,22 @@ with col1:
             video_id = extract_video_id(video_url)
             if video_id:
                 if video_id not in st.session_state.current_videos:
-                    with st.spinner("Fetching video data..."):
+                    # Enhanced loading spinner
+                    with st.spinner(''):
+                        st.markdown("""
+                        <div style="text-align: center; padding: 40px;">
+                            <div style="
+                                width: 60px;
+                                height: 60px;
+                                border: 4px solid #f3f3f3;
+                                border-top: 4px solid #4361ee;
+                                border-radius: 50%;
+                                animation: spin 1s linear infinite;
+                                margin: 0 auto;
+                            "></div>
+                            <p style="margin-top: 20px; color: #6c757d;">Analyzing comments...</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                         result = fetch_comments(video_id, video_url)
                         if result:
                             st.session_state.current_videos.append(video_id)
@@ -381,27 +498,96 @@ with tab1:
             video_info = st.session_state.video_data[video_selector]
             df = analyze_sentiment(video_info["df"].copy())
             
-            # Key Insights Section
+            # Enhanced Insight Boxes
             st.markdown('<div class="section">', unsafe_allow_html=True)
-            st.subheader("🔑 Key Insights")
+            st.subheader("🔍 Key Insights")
+            
+            insight_colors = {
+                '💚': 'linear-gradient(135deg, #38b000, #2d8c00)',
+                '👍': 'linear-gradient(135deg, #4cc9f0, #4361ee)',
+                '🔴': 'linear-gradient(135deg, #d00000, #9d0208)',
+                '⚠️': 'linear-gradient(135deg, #f48c06, #e85d04)',
+                '⚖️': 'linear-gradient(135deg, #7209b7, #560bad)',
+                '📊': 'linear-gradient(135deg, #4361ee, #3a0ca3)',
+                '🔍': 'linear-gradient(135deg, #f72585, #b5179e)',
+                '🔥': 'linear-gradient(135deg, #ff5400, #ff6d00)',
+                '👏': 'linear-gradient(135deg, #ff9e00, #ff9100)'
+            }
             
             insights = generate_insights(df, video_info["title"])
+            
             for insight in insights:
-                st.markdown(f'<div class="insight-box">{insight}</div>', unsafe_allow_html=True)
+                # Extract emoji for color matching
+                emoji = insight[:2] if insight[:2] in insight_colors else '📌'
+                bg_color = insight_colors.get(emoji, 'linear-gradient(135deg, #6c757d, #495057)')
+                
+                st.markdown(f"""
+                <div style="
+                    background: {bg_color};
+                    color: white;
+                    padding: 20px;
+                    border-radius: 14px;
+                    margin: 12px 0;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                    border-left: 6px solid rgba(255,255,255,0.3);
+                ">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.8rem;">{emoji}</span>
+                        <span style="font-size: 1rem; line-height: 1.4;">{insight}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
-            # Metrics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Total Comments", len(df))
-            with col2:
-                st.metric("Avg Sentiment", f"{df['sentiment_score'].mean():.2f}")
-            with col3:
-                positive_pct = (df["sentiment"] == "Positive").mean() * 100
-                st.metric("Positive %", f"{positive_pct:.1f}%")
-            with col4:
-                engagement = df["like_count"].mean() if "like_count" in df.columns else 0
-                st.metric("Avg Likes/Comment", f"{engagement:.0f}")
+            st.markdown('</div>', unsafe_allow_html=True)
             
+            # Enhanced Metrics Section
+            st.markdown('<div class="section">', unsafe_allow_html=True)
+            st.subheader("📊 Performance Overview")
+            
+            positive_pct = (df["sentiment"] == "Positive").mean() * 100
+            engagement = df["like_count"].mean() if "like_count" in df.columns else 0
+            
+            # Create metric cards with icons
+            metrics_html = f"""
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0;">
+                <div class="metric-card" style="background: linear-gradient(135deg, #4cc9f0, #4361ee);">
+                    <div style="font-size: 2rem;">📝</div>
+                    <div style="font-size: 2rem; font-weight: bold;">{len(df)}</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Total Comments</div>
+                </div>
+                <div class="metric-card" style="background: linear-gradient(135deg, #38b000, #2d8c00);">
+                    <div style="font-size: 2rem;">📈</div>
+                    <div style="font-size: 2rem; font-weight: bold;">{df['sentiment_score'].mean():.2f}</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Avg Sentiment</div>
+                </div>
+                <div class="metric-card" style="background: linear-gradient(135deg, #7209b7, #560bad);">
+                    <div style="font-size: 2rem;">👍</div>
+                    <div style="font-size: 2rem; font-weight: bold;">{positive_pct:.1f}%</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Positive</div>
+                </div>
+                <div class="metric-card" style="background: linear-gradient(135deg, #f48c06, #dc6b06);">
+                    <div style="font-size: 2rem;">❤️</div>
+                    <div style="font-size: 2rem; font-weight: bold;">{engagement:.0f}</div>
+                    <div style="font-size: 0.9rem; opacity: 0.9;">Avg Likes</div>
+                </div>
+            </div>
+            
+            <style>
+            .metric-card {{
+                padding: 25px;
+                border-radius: 14px;
+                color: white;
+                text-align: center;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                transition: all 0.3s ease;
+            }}
+            .metric-card:hover {{
+                transform: translateY(-5px);
+                box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+            }}
+            </style>
+            """
+            st.markdown(metrics_html, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
             
             # Charts
@@ -417,10 +603,15 @@ with tab1:
                     names=sentiment_counts.index,
                     color=sentiment_counts.index,
                     color_discrete_map={
-                        'Positive': '#28a745',
+                        'Positive': '#38b000',
                         'Neutral': '#6c757d',
-                        'Negative': '#dc3545'
+                        'Negative': '#d00000'
                     }
+                )
+                fig.update_layout(
+                    template=custom_template,
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -438,24 +629,35 @@ with tab1:
                     y=daily_avg.values,
                     mode='lines+markers',
                     name='Avg Sentiment',
-                    line=dict(color='#1a73e8', width=3)
+                    line=dict(color='#4361ee', width=3),
+                    marker=dict(size=8, color='#4361ee')
                 ))
                 fig.add_trace(go.Bar(
                     x=daily_count.index,
                     y=daily_count.values,
                     name='Comment Volume',
                     yaxis='y2',
-                    marker_color='rgba(200, 200, 200, 0.6)'
+                    marker_color='rgba(67, 97, 238, 0.2)',
+                    opacity=0.7
                 ))
                 
                 fig.update_layout(
-                    yaxis=dict(title="Sentiment Score"),
+                    yaxis=dict(title="Sentiment Score", gridcolor='rgba(0,0,0,0.05)'),
                     yaxis2=dict(
                         title="Comment Count",
                         overlaying="y",
-                        side="right"
+                        side="right",
+                        gridcolor='rgba(0,0,0,0.05)'
                     ),
-                    hovermode='x unified'
+                    hovermode='x unified',
+                    template=custom_template,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="center",
+                        x=0.5
+                    )
                 )
                 st.plotly_chart(fig, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -473,7 +675,14 @@ with tab1:
                 if words:
                     word_counts = Counter(words).most_common(10)
                     pos_words_df = pd.DataFrame(word_counts, columns=['Word', 'Count'])
-                    st.dataframe(pos_words_df, use_container_width=True)
+                    # Style the dataframe
+                    st.dataframe(
+                        pos_words_df.style
+                        .background_gradient(subset=['Count'], cmap='Greens')
+                        .format({'Count': '{:,.0f}'}),
+                        use_container_width=True,
+                        height=400
+                    )
             
             with col2:
                 st.markdown("**Top Words in Negative Comments**")
@@ -482,7 +691,14 @@ with tab1:
                 if words:
                     word_counts = Counter(words).most_common(10)
                     neg_words_df = pd.DataFrame(word_counts, columns=['Word', 'Count'])
-                    st.dataframe(neg_words_df, use_container_width=True)
+                    # Style the dataframe
+                    st.dataframe(
+                        neg_words_df.style
+                        .background_gradient(subset=['Count'], cmap='Reds')
+                        .format({'Count': '{:,.0f}'}),
+                        use_container_width=True,
+                        height=400
+                    )
             
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -499,11 +715,29 @@ with tab2:
             cols = st.columns(len(comparison_df))
             for idx, (_, row) in enumerate(comparison_df.iterrows()):
                 with cols[idx]:
-                    st.metric(
-                        label=row["Video"],
-                        value=row["Total Comments"],
-                        delta=f"{row['Avg Sentiment']:.2f} avg sentiment"
-                    )
+                    st.markdown(f"""
+                    <div style="
+                        background: linear-gradient(135deg, #4361ee, #3a0ca3);
+                        color: white;
+                        padding: 20px;
+                        border-radius: 14px;
+                        text-align: center;
+                        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+                    ">
+                        <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 10px;">
+                            {row["Video"]}
+                        </div>
+                        <div style="font-size: 2rem; font-weight: 700;">
+                            {row["Total Comments"]}
+                        </div>
+                        <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 5px;">
+                            Comments
+                        </div>
+                        <div style="margin-top: 10px; font-size: 0.9rem;">
+                            Sentiment: {row['Avg Sentiment']:.2f}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
             
             # Comparison Charts
             col1, col2 = st.columns(2)
@@ -515,7 +749,12 @@ with tab2:
                     y=["Positive %", "Negative %"],
                     title="Sentiment Distribution by Video",
                     barmode="group",
-                    color_discrete_map={"Positive %": "#28a745", "Negative %": "#dc3545"}
+                    color_discrete_map={"Positive %": "#38b000", "Negative %": "#d00000"}
+                )
+                fig.update_layout(
+                    template=custom_template,
+                    yaxis_title="Percentage (%)",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -528,9 +767,16 @@ with tab2:
                     color="Video",
                     title="Engagement vs Sentiment",
                     hover_name="Video",
-                    size_max=60
+                    size_max=60,
+                    color_discrete_sequence=px.colors.qualitative.Bold
                 )
-                fig.update_layout(showlegend=False)
+                fig.update_layout(
+                    template=custom_template,
+                    xaxis_title="Total Comments",
+                    yaxis_title="Average Sentiment",
+                    showlegend=True,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                )
                 st.plotly_chart(fig, use_container_width=True)
             
             # Detailed Comparison Table
@@ -538,14 +784,21 @@ with tab2:
             display_df = comparison_df.drop(columns=["Video ID"])
             st.dataframe(
                 display_df.style
-                .background_gradient(subset=["Positive %"], cmap="Greens")
-                .background_gradient(subset=["Negative %"], cmap="Reds")
+                .background_gradient(subset=["Positive %"], cmap="Greens", vmin=0, vmax=100)
+                .background_gradient(subset=["Negative %"], cmap="Reds_r", vmin=0, vmax=100)
+                .background_gradient(subset=["Avg Sentiment"], cmap="RdYlGn", vmin=-1, vmax=1)
                 .format({
                     "Positive %": "{:.1f}%",
                     "Negative %": "{:.1f}%",
-                    "Avg Sentiment": "{:.2f}"
+                    "Avg Sentiment": "{:.3f}",
+                    "Total Comments": "{:,.0f}"
+                })
+                .set_properties(**{
+                    'text-align': 'center',
+                    'font-family': 'Inter, sans-serif'
                 }),
-                use_container_width=True
+                use_container_width=True,
+                height=300
             )
         else:
             st.info("Unable to generate comparison data. Make sure videos have comments.")
@@ -577,59 +830,89 @@ with tab3:
                 sentiment_filter = st.multiselect(
                     "Filter by Sentiment",
                     options=["Positive", "Neutral", "Negative"],
-                    default=["Positive", "Neutral", "Negative"]
+                    default=["Positive", "Neutral", "Negative"],
+                    format_func=lambda x: f"📊 {x}"
                 )
             with col2:
                 sort_by = st.selectbox(
                     "Sort by",
-                    options=["Newest", "Oldest", "Most Likes", "Highest Sentiment", "Lowest Sentiment"]
+                    options=["Newest", "Oldest", "Most Likes", "Highest Sentiment", "Lowest Sentiment"],
+                    format_func=lambda x: f"🔽 {x}" if "Lowest" in x else f"🔼 {x}" if "Highest" in x else f"📅 {x}"
                 )
             with col3:
-                comments_to_show = st.slider("Comments to show", 10, 100, 20)
+                comments_to_show = st.slider("Comments to show", 10, 100, 20, format="%d comments")
             
             # Apply filters
             filtered_df = df[df["sentiment"].isin(sentiment_filter)]
             
             # Apply sorting
-            if sort_by == "Newest":
-                filtered_df = filtered_df.sort_values("published_at", ascending=False)
-            elif sort_by == "Oldest":
-                filtered_df = filtered_df.sort_values("published_at", ascending=True)
-            elif sort_by == "Most Likes":
-                filtered_df = filtered_df.sort_values("like_count", ascending=False)
-            elif sort_by == "Highest Sentiment":
-                filtered_df = filtered_df.sort_values("sentiment_score", ascending=False)
-            elif sort_by == "Lowest Sentiment":
-                filtered_df = filtered_df.sort_values("sentiment_score", ascending=True)
+            sort_mapping = {
+                "Newest": ("published_at", False),
+                "Oldest": ("published_at", True),
+                "Most Likes": ("like_count", False),
+                "Highest Sentiment": ("sentiment_score", False),
+                "Lowest Sentiment": ("sentiment_score", True)
+            }
+            
+            if sort_by in sort_mapping:
+                col, ascending = sort_mapping[sort_by]
+                filtered_df = filtered_df.sort_values(col, ascending=ascending)
             
             # Display comments
-            st.subheader(f"Showing {len(filtered_df.head(comments_to_show))} comments")
+            st.subheader(f"📝 Showing {len(filtered_df.head(comments_to_show))} comments")
+            
+            sentiment_colors = {
+                "Positive": "#38b000",
+                "Neutral": "#6c757d",
+                "Negative": "#d00000"
+            }
+            
+            sentiment_icons = {
+                "Positive": "✅",
+                "Neutral": "⚪",
+                "Negative": "❌"
+            }
             
             for _, row in filtered_df.head(comments_to_show).iterrows():
-                sentiment_color = {
-                    "Positive": "#28a745",
-                    "Neutral": "#6c757d",
-                    "Negative": "#dc3545"
-                }[row["sentiment"]]
+                sentiment_color = sentiment_colors[row["sentiment"]]
+                sentiment_icon = sentiment_icons[row["sentiment"]]
                 
                 st.markdown(f"""
                 <div style="
-                    border-left: 4px solid {sentiment_color};
-                    padding: 12px;
-                    margin: 8px 0;
-                    background: #f8f9fa;
-                    border-radius: 0 8px 8px 0;
+                    border-left: 6px solid {sentiment_color};
+                    padding: 18px;
+                    margin: 12px 0;
+                    background: white;
+                    border-radius: 0 12px 12px 0;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+                    transition: all 0.2s ease;
                 ">
-                    <div style="display: flex; justify-content: space-between;">
-                        <span style="font-weight: bold; color: {sentiment_color};">
-                            {row['sentiment']} ({row['sentiment_score']:.2f})
-                        </span>
-                        <span style="color: #6c757d; font-size: 0.9em;">
-                            {row['published_at'].strftime('%Y-%m-%d')}
-                            {' • ' + str(row['like_count']) + ' likes' if row.get('like_count', 0) > 0 else ''}
-                        </span>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.5rem;">{sentiment_icon}</span>
+                            <span style="font-weight: 600; color: {sentiment_color}; font-size: 1.1rem;">
+                                {row['sentiment']} <span style="font-weight: 400; opacity: 0.8;">({row['sentiment_score']:.2f})</span>
+                            </span>
+                        </div>
+                        <div style="color: #6c757d; font-size: 0.9em; text-align: right;">
+                            <div>{row['published_at'].strftime('%Y-%m-%d %H:%M')}</div>
+                            <div style="margin-top: 4px;">
+                                {row.get('author', 'Unknown')}
+                                {' • ' + str(row['like_count']) + ' ❤️' if row.get('like_count', 0) > 0 else ''}
+                            </div>
+                        </div>
                     </div>
-                    <p style="margin: 8px 0;">{row['comment'][:300]}{'...' if len(row['comment']) > 300 else ''}</p>
+                    <div style="
+                        padding: 12px;
+                        background: #f8f9fa;
+                        border-radius: 8px;
+                        margin-top: 8px;
+                        font-size: 0.95rem;
+                        line-height: 1.5;
+                        color: #495057;
+                    ">
+                        {row['comment'][:400]}{'...' if len(row['comment']) > 400 else ''}
+                    </div>
                 </div>
                 """, unsafe_allow_html=True)
         
@@ -666,7 +949,13 @@ with tab4:
                     y="sentiment_score",
                     title="Average Sentiment by Hour",
                     color="sentiment_score",
-                    color_continuous_scale="RdYlGn"
+                    color_continuous_scale="RdYlGn",
+                    labels={"hour": "Hour of Day", "sentiment_score": "Average Sentiment"}
+                )
+                fig.update_layout(
+                    template=custom_template,
+                    xaxis=dict(tickmode='linear', dtick=1),
+                    coloraxis_colorbar=dict(title="Sentiment")
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -683,18 +972,23 @@ with tab4:
                     title="Comment Length vs Sentiment",
                     hover_data=["comment"],
                     color_discrete_map={
-                        "Positive": "#28a745",
+                        "Positive": "#38b000",
                         "Neutral": "#6c757d",
-                        "Negative": "#dc3545"
-                    }
+                        "Negative": "#d00000"
+                    },
+                    labels={"comment_length": "Comment Length (characters)", "sentiment_score": "Sentiment Score"}
+                )
+                fig.update_layout(
+                    template=custom_template,
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
             # Export Section
-            st.markdown("---")
+            st.markdown('<div class="section">', unsafe_allow_html=True)
             st.subheader("📤 Export Data")
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
                 if st.button("📥 Download CSV", use_container_width=True):
@@ -718,16 +1012,64 @@ with tab4:
                             "Positive Comments": (df["sentiment"] == "Positive").sum(),
                             "Negative Comments": (df["sentiment"] == "Negative").sum(),
                             "Neutral Comments": (df["sentiment"] == "Neutral").sum(),
+                            "Max Comment Likes": df["like_count"].max() if "like_count" in df.columns else 0,
+                            "Average Comment Length": df["comment"].str.len().mean(),
                             "Analysis Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
                         
-                        summary_df = pd.DataFrame([summary])
-                        st.dataframe(summary_df, use_container_width=True)
+                        summary_df = pd.DataFrame([summary]).T
+                        summary_df.columns = ["Value"]
                         
-                        st.success("Report generated successfully!")
+                        st.markdown("### 📋 Analysis Summary")
+                        st.dataframe(
+                            summary_df.style
+                            .background_gradient(subset=['Value'], cmap='Blues')
+                            .format({
+                                "Average Sentiment": "{:.3f}",
+                                "Average Comment Length": "{:.1f}",
+                                "Total Comments": "{:,.0f}",
+                                "Positive Comments": "{:,.0f}",
+                                "Negative Comments": "{:,.0f}",
+                                "Neutral Comments": "{:,.0f}",
+                                "Max Comment Likes": "{:,.0f}"
+                            }),
+                            use_container_width=True,
+                            height=400
+                        )
+                        
+                        st.success("✅ Report generated successfully!")
+            
+            with col3:
+                if st.button("📈 View Raw Data", use_container_width=True):
+                    st.markdown("### 📄 Raw Comment Data")
+                    st.dataframe(
+                        df[["comment", "sentiment", "sentiment_score", "published_at", "like_count", "author"]]
+                        .style
+                        .background_gradient(subset=['sentiment_score'], cmap='RdYlGn', vmin=-1, vmax=1)
+                        .format({
+                            'sentiment_score': '{:.3f}',
+                            'like_count': '{:,.0f}'
+                        }),
+                        use_container_width=True,
+                        height=400
+                    )
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Footer
 st.markdown("---")
-st.caption("YouTube Sentiment Analysis Dashboard • Powered by YouTube Data API v3")
+st.markdown("""
+<div style="text-align: center; color: #6c757d; padding: 20px 0;">
+    <div style="font-size: 1rem; font-weight: 600; margin-bottom: 10px;">
+        YouTube Sentiment Analysis Dashboard
+    </div>
+    <div style="font-size: 0.9rem;">
+        Powered by YouTube Data API v3 • Built with Streamlit
+    </div>
+    <div style="margin-top: 10px; font-size: 0.8rem; opacity: 0.7;">
+        Analyze and visualize sentiment in YouTube comments
+    </div>
+</div>
+""", unsafe_allow_html=True)
