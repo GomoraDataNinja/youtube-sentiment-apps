@@ -18,114 +18,71 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-:root {
-    --primary-blue: #1a73e8;
-    --secondary-blue: #185abc;
-    --accent-teal: #34a853;
-    --success-green: #188038;
-    --warning-orange: #f29900;
-    --danger-red: #d93025;
-    --light-bg: #f1f3f4;
-    --card-bg: #ffffff;
-    --text-dark: #202124;
-    --text-muted: #5f6368;
-}
-
-/* App background */
-.stApp {
-    background: #f1f3f4;
-    font-family: "Inter", "Roboto", "Segoe UI", system-ui, sans-serif;
-    color: var(--text-dark);
-}
-
-/* Main sections */
-.section {
-    background: var(--card-bg);
-    padding: 26px;
-    border-radius: 14px;
-    margin-bottom: 24px;
-    box-shadow: 0 1px 3px rgba(60,64,67,.15);
-    border: 1px solid #dadce0;
-}
-
-/* Headings */
-h1 {
-    color: var(--text-dark);
-    font-weight: 600;
-    font-size: 2.2rem;
-}
-
-h2, h3 {
-    color: var(--text-dark);
-    font-weight: 500;
-}
-
-/* Sidebar */
+/* FORCE solid sidebar — no blur, no transparency */
 section[data-testid="stSidebar"] {
-    background: #ffffff;
+    background-color: #ffffff !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
     border-right: 1px solid #dadce0;
+}
+
+/* Sidebar content wrapper */
+section[data-testid="stSidebar"] > div {
+    background-color: #ffffff !important;
+}
+
+/* Sidebar text */
+section[data-testid="stSidebar"] * {
+    color: #202124;
+    font-family: "Inter", "Roboto", system-ui, sans-serif;
+}
+
+/* Sidebar headings */
+section[data-testid="stSidebar"] h1,
+section[data-testid="stSidebar"] h2,
+section[data-testid="stSidebar"] h3 {
+    color: #202124;
+    font-weight: 600;
 }
 
 /* Sidebar buttons */
 section[data-testid="stSidebar"] .stButton > button {
-    background: var(--primary-blue);
-    color: white;
+    background-color: #1a73e8;
+    color: #ffffff;
     border-radius: 8px;
     border: none;
     font-weight: 500;
 }
 
 section[data-testid="stSidebar"] .stButton > button:hover {
-    background: var(--secondary-blue);
+    background-color: #185abc;
 }
 
-/* Metrics */
-div[data-testid="metric-container"] {
-    background: white;
-    border-radius: 10px;
-    padding: 16px;
-    box-shadow: 0 1px 2px rgba(60,64,67,.15);
+/* Sidebar text inputs */
+section[data-testid="stSidebar"] input {
+    background-color: #ffffff;
+    border: 1px solid #dadce0;
+    border-radius: 6px;
+    color: #202124;
 }
 
-/* Tabs */
-.stTabs [data-baseweb="tab"] {
-    background: white;
+/* Remove Streamlit blur overlay */
+div[data-testid="stSidebarNav"] {
+    background: #ffffff !important;
+    backdrop-filter: none !important;
+}
+
+/* Sidebar tabs / captions */
+section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] {
+    background: #ffffff;
+    border: 1px solid #dadce0;
     border-radius: 8px;
-    padding: 12px 22px;
-    border: 1px solid #dadce0;
-    color: var(--text-muted);
-    font-weight: 500;
 }
 
-.stTabs [aria-selected="true"] {
-    background: var(--primary-blue);
-    color: white !important;
-    border: none;
-}
-
-/* Comment cards */
-.comment-card {
-    background: white;
-    border-radius: 10px;
-    border: 1px solid #dadce0;
-}
-
-/* Reduce visual noise */
-.stPlotlyChart {
-    background: white;
-    border-radius: 12px;
-    padding: 10px;
-}
-
-/* Tables */
-.stDataFrame {
-    background: white;
-    border-radius: 10px;
-}
-
-/* Footer */
-footer {
-    color: var(--text-muted);
+/* Kill any remaining transparency */
+section[data-testid="stSidebar"] {
+    opacity: 1 !important;
 }
 </style>
 
