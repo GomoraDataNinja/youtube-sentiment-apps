@@ -5,3 +5,5 @@ textblob
 matplotlib
 plotly
 numpy
+DejaVuSans.ttf
+DejaVuSans-Bold.ttf
