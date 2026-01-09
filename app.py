@@ -109,11 +109,12 @@ section[data-testid="stSidebar"] {
 """, unsafe_allow_html=True)
 
 # ============================================
-# PDF SANITIZATION FUNCTION - ENHANCED VERSION
+# ENHANCED SANITIZATION FUNCTION
 # ============================================
-def sanitize_text_for_pdf(text, method='replace'):
+def sanitize_text_for_pdf(text, method='remove'):
     """
-    Sanitize text for PDF generation to avoid encoding errors.
+    Enhanced sanitization for PDF generation
+    Returns ASCII-only text safe for FPDF
     """
     if text is None:
         return ""
@@ -126,395 +127,361 @@ def sanitize_text_for_pdf(text, method='replace'):
     if text.strip() == "":
         return text
     
-    # Common replacements for problematic characters
+    # First, replace problematic Unicode characters with ASCII equivalents
     replacements = {
-        '\u2022': '•',      # Bullet
-        '\u25cf': '•',      # Black circle
-        '\u25e6': '○',      # White circle
+        # Bullets and special symbols
+        '\u2022': '*',      # Bullet -> asterisk
+        '\u25cf': '*',      # Black circle -> asterisk
+        '\u25e6': '*',      # White circle -> asterisk
+        '\u2023': '*',      # Triangular bullet -> asterisk
+        '\u2043': '-',      # Hyphen bullet -> hyphen
+        
+        # Dashes
         '\u2013': '-',      # En dash
         '\u2014': '--',     # Em dash
+        
+        # Quotes
         '\u2018': "'",      # Left single quotation
         '\u2019': "'",      # Right single quotation
         '\u201c': '"',      # Left double quotation
         '\u201d': '"',      # Right double quotation
+        
+        # Special symbols
         '\u00a9': '(c)',    # Copyright
         '\u00ae': '(R)',    # Registered
         '\u2122': '(TM)',   # Trademark
         '\u2026': '...',    # Ellipsis
-        '\u2010': '-',      # Hyphen
-        '\u2011': '-',      # Non-breaking hyphen
-        '\u2012': '-',      # Figure dash
+        
+        # Currency
+        '\u00a3': 'GBP',    # Pound
+        '\u20ac': 'EUR',    # Euro
+        '\u00a5': 'JPY',    # Yen
+        
+        # Fractions
+        '\u00bc': '1/4',    # 1/4
+        '\u00bd': '1/2',    # 1/2
+        '\u00be': '3/4',    # 3/4
+        
+        # Common emoji replacements
+        '\u2764': '<3',     # Heart
+        '\u2665': '<3',     # Heart suit
+        '\u2605': '*',      # Star
+        '\u2713': '[OK]',   # Check mark
+        '\u2714': '[OK]',   # Heavy check
+        '\u2717': '[X]',    # X mark
+        
+        # Arrows
+        '\u2190': '<-',     # Left arrow
+        '\u2192': '->',     # Right arrow
+        '\u2191': '^',      # Up arrow
+        '\u2193': 'v',      # Down arrow
     }
     
     # Apply replacements
     for old_char, new_char in replacements.items():
         text = text.replace(old_char, new_char)
     
-    # Remove emojis and other non-ASCII characters
+    # Handle remaining Unicode characters
     if method == 'remove':
         # Remove all non-ASCII characters
         text = text.encode('ascii', 'ignore').decode('ascii')
     elif method == 'replace':
         # Replace non-ASCII with placeholder
-        text = text.encode('ascii', 'replace').decode('ascii').replace('?', '')
+        result = []
+        for char in text:
+            if ord(char) < 128:
+                result.append(char)
+            else:
+                result.append(' ')
+        text = ''.join(result)
+    
+    # Clean up multiple spaces and trim
+    text = ' '.join(text.split())
     
     return text
 
 # ============================================
-# SAFE PDF GENERATION FUNCTION
-# ============================================
-def safe_generate_pdf(video_id, video_info, df):
-    """
-    Wrapper function that sanitizes all text before PDF generation
-    """
-    try:
-        # Sanitize video info
-        safe_video_info = {}
-        for key, value in video_info.items():
-            if key == 'df':
-                continue  # Skip the dataframe
-            if isinstance(value, dict):
-                # Handle nested dictionaries (like stats)
-                safe_value = {}
-                for k, v in value.items():
-                    safe_value[k] = sanitize_text_for_pdf(str(v))
-                safe_video_info[key] = safe_value
-            else:
-                safe_video_info[key] = sanitize_text_for_pdf(str(value))
-        
-        # Sanitize DataFrame
-        safe_df = df.copy()
-        text_columns = safe_df.select_dtypes(include=['object']).columns
-        for col in text_columns:
-            safe_df[col] = safe_df[col].apply(
-                lambda x: sanitize_text_for_pdf(str(x)) if pd.notnull(x) else ""
-            )
-        
-        # Generate PDF with sanitized data
-        return generate_pdf_report(video_id, safe_video_info, safe_df)
-        
-    except Exception as e:
-        st.error(f"Error in PDF generation: {str(e)}")
-        raise
-
-# ============================================
-# UPDATED PDF GENERATION FUNCTION WITH UTF-8 FIX
+# ROBUST PDF GENERATION FUNCTION
 # ============================================
 def generate_pdf_report(video_id, video_info, df):
-    """Generate a comprehensive PDF report with charts and insights"""
-    
-    # Analyze data
-    df_analyzed = analyze_sentiment(df.copy())
-    total_comments = len(df_analyzed)
-    avg_sentiment = df_analyzed["sentiment_score"].mean()
-    positive_pct = (df_analyzed["sentiment"] == "Positive").mean() * 100
-    negative_pct = (df_analyzed["sentiment"] == "Negative").mean() * 100
-    neutral_pct = (df_analyzed["sentiment"] == "Neutral").mean() * 100
-    
-    # Get insights
-    insights = generate_insights(df_analyzed, video_info["title"])
-    
-    # Create PDF with UTF-8 support
-    class UnicodePDF(FPDF):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
-            # Add a Unicode compatible font
-            self.add_font('DejaVu', '', 'DejaVuSans.ttf', uni=True)
-            self.add_font('DejaVu', 'B', 'DejaVuSans-Bold.ttf', uni=True)
-            self.add_font('DejaVu', 'I', 'DejaVuSans-Oblique.ttf', uni=True)
-            self.add_font('DejaVu', 'BI', 'DejaVuSans-BoldOblique.ttf', uni=True)
-        
-        def header(self):
-            # Optional: Add header to each page
-            pass
-        
-        def footer(self):
-            # Position at 1.5 cm from bottom
-            self.set_y(-15)
-            # Set font
-            self.set_font('DejaVu', 'I', 8)
-            # Page number
-            self.cell(0, 10, 'Page ' + str(self.page_no()) + '/{nb}', 0, 0, 'C')
-    
-    # Create PDF instance
-    pdf = UnicodePDF()
-    pdf.alias_nb_pages()
-    pdf.set_auto_page_break(auto=True, margin=15)
-    
-    # --- COVER PAGE ---
-    pdf.add_page()
-    
-    # Set brand colors
-    primary_color = (67, 97, 238)  # #4361ee
-    secondary_color = (56, 176, 0)  # #38b000
-    accent_color = (114, 9, 183)   # #7209b7
-    
-    # Google-style cover
-    pdf.set_fill_color(*primary_color)
-    pdf.rect(0, 0, 210, 50, 'F')
-    
-    # Title
-    pdf.set_font('DejaVu', 'B', 24)
-    pdf.set_text_color(255, 255, 255)
-    pdf.cell(0, 60, 'YouTube Sentiment Analysis Report', 0, 1, 'C')
-    
-    # Video title
-    pdf.set_font('DejaVu', '', 14)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 10, '', 0, 1)  # Spacing
-    
-    # Video info box
-    pdf.set_fill_color(245, 245, 245)
-    pdf.rect(20, 80, 170, 60, 'F')
-    pdf.set_xy(25, 85)
-    pdf.set_font('DejaVu', 'B', 16)
-    pdf.set_text_color(*primary_color)
-    pdf.multi_cell(160, 8, sanitize_text_for_pdf(video_info.get("title", "Unknown Video"))[:80] + "...", 0, 'L')
-    
-    pdf.set_xy(25, 110)
-    pdf.set_font('DejaVu', '', 12)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(160, 8, f"Video ID: {video_id}", 0, 1, 'L')
-    pdf.cell(160, 8, f"Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", 0, 1, 'L')
-    pdf.cell(160, 8, f"Total Comments Analyzed: {total_comments}", 0, 1, 'L')
-    
-    # --- EXECUTIVE SUMMARY PAGE ---
-    pdf.add_page()
-    
-    # Page title
-    pdf.set_fill_color(*primary_color)
-    pdf.set_font('DejaVu', 'B', 20)
-    pdf.set_text_color(*primary_color)
-    pdf.cell(0, 20, 'Executive Summary', 0, 1, 'L')
-    pdf.line(10, 30, 200, 30)
-    
-    # Key metrics
-    pdf.set_font('DejaVu', 'B', 16)
-    pdf.set_text_color(*secondary_color)
-    pdf.cell(0, 15, 'Key Metrics', 0, 1, 'L')
-    
-    # Metrics grid
-    metrics = [
-        ("Total Comments", f"{total_comments:,}"),
-        ("Avg Sentiment", f"{avg_sentiment:.3f}"),
-        ("Positive Comments", f"{positive_pct:.1f}%"),
-        ("Negative Comments", f"{negative_pct:.1f}%"),
-        ("Neutral Comments", f"{neutral_pct:.1f}%")
-    ]
-    
-    y_pos = 50
-    for i, (label, value) in enumerate(metrics):
-        x_pos = 10 + (i % 2) * 95
-        if i % 2 == 0 and i > 0:
-            y_pos += 25
-        
-        # Metric box
-        pdf.set_fill_color(245, 245, 245)
-        pdf.rect(x_pos, y_pos, 90, 20, 'F')
-        
-        # Label
-        pdf.set_font('DejaVu', '', 10)
-        pdf.set_text_color(100, 100, 100)
-        pdf.set_xy(x_pos + 5, y_pos + 3)
-        pdf.cell(80, 5, label, 0, 1, 'L')
-        
-        # Value
-        pdf.set_font('DejaVu', 'B', 16)
-        pdf.set_text_color(*primary_color)
-        pdf.set_xy(x_pos + 5, y_pos + 10)
-        pdf.cell(80, 8, value, 0, 1, 'L')
-    
-    # --- AUTO INSIGHTS SECTION ---
-    pdf.add_page()
-    
-    # Title
-    pdf.set_fill_color(*accent_color)
-    pdf.set_font('DejaVu', 'B', 20)
-    pdf.set_text_color(*accent_color)
-    pdf.cell(0, 20, 'Auto Insights & Recommendations', 0, 1, 'L')
-    pdf.line(10, 30, 200, 30)
-    
-    # Insights
-    y_pos = 40
-    for insight in insights:
-        if y_pos > 250:  # Check if we need new page
-            pdf.add_page()
-            y_pos = 20
-        
-        # Clean insight text
-        clean_insight = sanitize_text_for_pdf(insight)
-        
-        # Insight box
-        pdf.set_fill_color(240, 248, 255)
-        pdf.rect(10, y_pos, 190, 15, 'F')
-        
-        # Insight text
-        pdf.set_font('DejaVu', '', 11)
-        pdf.set_text_color(0, 0, 0)
-        pdf.set_xy(15, y_pos + 5)
-        pdf.multi_cell(180, 5, clean_insight)
-        
-        y_pos += 20
-    
-    # --- SENTIMENT DISTRIBUTION ---
-    pdf.add_page()
-    
-    # Title
-    pdf.set_font('DejaVu', 'B', 20)
-    pdf.set_text_color(*primary_color)
-    pdf.cell(0, 20, 'Sentiment Distribution', 0, 1, 'L')
-    pdf.line(10, 30, 200, 30)
-    
-    # Create simple chart (text-based)
-    pdf.set_font('DejaVu', '', 12)
-    pdf.set_text_color(100, 100, 100)
-    
-    # Positive bar
-    pdf.set_fill_color(*secondary_color)
-    pdf.rect(20, 50, positive_pct * 1.6, 15, 'F')
-    pdf.set_xy(20 + positive_pct * 1.6 + 5, 53)
-    pdf.cell(30, 8, f"Positive: {positive_pct:.1f}%", 0, 1, 'L')
-    
-    # Neutral bar
-    pdf.set_fill_color(200, 200, 200)
-    pdf.rect(20, 75, neutral_pct * 1.6, 15, 'F')
-    pdf.set_xy(20 + neutral_pct * 1.6 + 5, 78)
-    pdf.cell(30, 8, f"Neutral: {neutral_pct:.1f}%", 0, 1, 'L')
-    
-    # Negative bar
-    pdf.set_fill_color(220, 53, 69)  # Red color
-    pdf.rect(20, 100, negative_pct * 1.6, 15, 'F')
-    pdf.set_xy(20 + negative_pct * 1.6 + 5, 103)
-    pdf.cell(30, 8, f"Negative: {negative_pct:.1f}%", 0, 1, 'L')
-    
-    # --- DETAILED ANALYSIS ---
-    pdf.add_page()
-    
-    # Title
-    pdf.set_font('DejaVu', 'B', 20)
-    pdf.set_text_color(*primary_color)
-    pdf.cell(0, 20, 'Detailed Analysis', 0, 1, 'L')
-    pdf.line(10, 30, 200, 30)
-    
-    # Sample comments
-    pdf.set_font('DejaVu', 'B', 14)
-    pdf.set_text_color(*accent_color)
-    pdf.cell(0, 15, 'Sample Comments by Sentiment:', 0, 1, 'L')
-    
-    # Get sample comments
-    sample_size = 5
-    sentiments = ["Positive", "Neutral", "Negative"]
-    
-    y_pos = 60
-    for sentiment in sentiments:
-        sentiment_comments = df_analyzed[df_analyzed["sentiment"] == sentiment].head(sample_size)
-        
-        if len(sentiment_comments) > 0:
-            # Sentiment header
-            pdf.set_font('DejaVu', 'B', 12)
-            color_map = {
-                "Positive": secondary_color,
-                "Neutral": (100, 100, 100),
-                "Negative": (220, 53, 69)
-            }
-            pdf.set_text_color(*color_map[sentiment])
-            pdf.cell(0, 10, f"{sentiment} Comments:", 0, 1, 'L')
-            
-            # Comments
-            pdf.set_font('DejaVu', '', 10)
-            pdf.set_text_color(0, 0, 0)
-            
-            for _, row in sentiment_comments.iterrows():
-                if y_pos > 250:  # Check page space
-                    pdf.add_page()
-                    y_pos = 20
-                
-                # Ensure comment is properly sanitized
-                safe_comment = sanitize_text_for_pdf(row["comment"])
-                comment_text = safe_comment[:100] + "..." if len(safe_comment) > 100 else safe_comment
-                pdf.multi_cell(0, 8, f"• {comment_text}")
-                y_pos += 20
-    
-    # --- CONCLUSION ---
-    pdf.add_page()
-    
-    # Title
-    pdf.set_fill_color(*primary_color)
-    pdf.set_font('DejaVu', 'B', 20)
-    pdf.set_text_color(*primary_color)
-    pdf.cell(0, 20, 'Conclusion & Next Steps', 0, 1, 'L')
-    pdf.line(10, 30, 200, 30)
-    
-    # Recommendations based on sentiment
-    pdf.set_font('DejaVu', '', 12)
-    pdf.set_text_color(0, 0, 0)
-    
-    recommendations = []
-    if avg_sentiment > 0.2:
-        recommendations = [
-            "1. Leverage positive sentiment in marketing materials",
-            "2. Engage with commenters to build community",
-            "3. Consider creating similar content",
-            "4. Share highlights on social media"
-        ]
-    elif avg_sentiment > 0:
-        recommendations = [
-            "1. Acknowledge positive feedback",
-            "2. Address any recurring concerns",
-            "3. Monitor sentiment trends",
-            "4. Engage with constructive feedback"
-        ]
-    elif avg_sentiment < 0:
-        recommendations = [
-            "1. Review critical feedback carefully",
-            "2. Consider making content adjustments",
-            "3. Address common concerns in future content",
-            "4. Monitor sentiment for improvement"
-        ]
-    else:
-        recommendations = [
-            "1. Seek more specific feedback",
-            "2. Encourage viewer engagement",
-            "3. Test different content approaches",
-            "4. Monitor for sentiment shifts"
-        ]
-    
-    y_pos = 40
-    for rec in recommendations:
-        pdf.set_xy(15, y_pos)
-        pdf.cell(0, 10, rec, 0, 1, 'L')
-        y_pos += 12
-    
-    # Footer
-    pdf.set_y(-30)
-    pdf.set_font('DejaVu', 'I', 10)
-    pdf.set_text_color(100, 100, 100)
-    pdf.cell(0, 10, 'Generated by YouTube Sentiment Analysis Dashboard', 0, 0, 'C')
-    
-    # Return PDF as bytes - FIXED ENCODING ISSUE
+    """Generate a simple PDF report using built-in fonts only"""
     try:
-        # Method 1: Try to get as bytes directly
-        pdf_bytes = pdf.output(dest='S')
-        if isinstance(pdf_bytes, str):
-            pdf_bytes = pdf_bytes.encode('latin-1', errors='replace')
-        return pdf_bytes
-    except:
-        # Method 2: Fallback to BytesIO
+        # Analyze data
+        df_analyzed = analyze_sentiment(df.copy())
+        total_comments = len(df_analyzed)
+        
+        # Create PDF with built-in fonts
+        pdf = FPDF()
+        pdf.add_page()
+        
+        # Title
+        pdf.set_font("Arial", "B", 16)
+        pdf.cell(0, 10, "YouTube Sentiment Analysis Report", 0, 1, "C")
+        pdf.ln(5)
+        
+        # Horizontal line
+        pdf.set_line_width(0.5)
+        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
+        pdf.ln(10)
+        
+        # Video info
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(0, 10, "Video Information", 0, 1)
+        pdf.set_font("Arial", "", 10)
+        
+        video_title = video_info.get("title", "Unknown Video")
+        safe_title = sanitize_text_for_pdf(video_title, method='remove')[:80]
+        
+        pdf.cell(40, 6, "Title:", 0, 0)
+        pdf.multi_cell(0, 6, safe_title)
+        
+        pdf.cell(40, 6, "Video ID:", 0, 0)
+        pdf.cell(0, 6, video_id, 0, 1)
+        
+        pdf.cell(40, 6, "Analysis Date:", 0, 0)
+        pdf.cell(0, 6, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 0, 1)
+        
+        pdf.cell(40, 6, "Total Comments:", 0, 0)
+        pdf.cell(0, 6, f"{total_comments:,}", 0, 1)
+        pdf.ln(5)
+        
+        if total_comments > 0:
+            # Calculate metrics
+            avg_sentiment = df_analyzed["sentiment_score"].mean()
+            positive_count = (df_analyzed["sentiment"] == "Positive").sum()
+            negative_count = (df_analyzed["sentiment"] == "Negative").sum()
+            neutral_count = (df_analyzed["sentiment"] == "Neutral").sum()
+            
+            positive_pct = (positive_count / total_comments) * 100
+            negative_pct = (negative_count / total_comments) * 100
+            neutral_pct = (neutral_count / total_comments) * 100
+            
+            # Key Metrics
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "Key Metrics", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            
+            col_width = 95
+            row_height = 8
+            
+            metrics = [
+                ("Total Comments", f"{total_comments:,}"),
+                ("Average Sentiment", f"{avg_sentiment:.3f}"),
+                ("Positive Comments", f"{positive_count:,} ({positive_pct:.1f}%)"),
+                ("Negative Comments", f"{negative_count:,} ({negative_pct:.1f}%)"),
+                ("Neutral Comments", f"{neutral_count:,} ({neutral_pct:.1f}%)")
+            ]
+            
+            for label, value in metrics:
+                pdf.cell(col_width, row_height, label, 0, 0)
+                pdf.cell(0, row_height, value, 0, 1)
+                pdf.ln(2)
+            
+            pdf.ln(5)
+            
+            # Insights
+            pdf.set_font("Arial", "B", 12)
+            pdf.cell(0, 10, "Key Insights", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            
+            insights = generate_insights(df_analyzed, video_info["title"])
+            for i, insight in enumerate(insights[:5], 1):
+                safe_insight = sanitize_text_for_pdf(insight, method='remove')
+                pdf.multi_cell(0, 6, f"{i}. {safe_insight}")
+                pdf.ln(2)
+            
+            # Sample Comments
+            if total_comments > 0:
+                pdf.add_page()
+                pdf.set_font("Arial", "B", 12)
+                pdf.cell(0, 10, "Sample Comments by Sentiment", 0, 1)
+                pdf.ln(5)
+                
+                sentiments = ["Positive", "Neutral", "Negative"]
+                
+                for sentiment in sentiments:
+                    pdf.set_font("Arial", "B", 11)
+                    if sentiment == "Positive":
+                        pdf.set_text_color(56, 176, 0)  # Green
+                    elif sentiment == "Negative":
+                        pdf.set_text_color(220, 53, 69)  # Red
+                    else:
+                        pdf.set_text_color(100, 100, 100)  # Gray
+                    
+                    pdf.cell(0, 8, f"{sentiment} Comments:", 0, 1)
+                    pdf.set_text_color(0, 0, 0)  # Back to black
+                    pdf.set_font("Arial", "", 9)
+                    
+                    sentiment_comments = df_analyzed[df_analyzed["sentiment"] == sentiment].head(3)
+                    
+                    if len(sentiment_comments) > 0:
+                        for idx, (_, row) in enumerate(sentiment_comments.iterrows(), 1):
+                            comment_text = row["comment"]
+                            safe_comment = sanitize_text_for_pdf(comment_text, method='remove')
+                            truncated_comment = safe_comment[:100] + "..." if len(safe_comment) > 100 else safe_comment
+                            pdf.multi_cell(0, 5, f"  {idx}. {truncated_comment}")
+                            pdf.ln(1)
+                    
+                    pdf.ln(5)
+                    
+                    if pdf.get_y() > 250:
+                        pdf.add_page()
+            
+            # Recommendations
+            pdf.set_font("Arial", "B", 12)
+            pdf.set_text_color(0, 0, 0)
+            pdf.cell(0, 10, "Recommendations", 0, 1)
+            pdf.set_font("Arial", "", 10)
+            
+            if avg_sentiment > 0.2:
+                recs = [
+                    "Leverage positive feedback in marketing",
+                    "Engage with commenters to build community",
+                    "Create similar content based on positive response"
+                ]
+            elif avg_sentiment > 0:
+                recs = [
+                    "Acknowledge positive feedback",
+                    "Address minor concerns mentioned",
+                    "Monitor sentiment trends"
+                ]
+            elif avg_sentiment < -0.2:
+                recs = [
+                    "Review critical feedback carefully",
+                    "Consider content adjustments",
+                    "Address common concerns publicly"
+                ]
+            else:
+                recs = [
+                    "Seek more specific feedback",
+                    "Encourage viewer engagement",
+                    "Test different content approaches"
+                ]
+            
+            for rec in recs:
+                pdf.multi_cell(0, 6, f"* {rec}")
+                pdf.ln(2)
+        else:
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 10, "No comments available for analysis.", 0, 1)
+        
+        # Footer
+        pdf.set_y(-15)
+        pdf.set_font("Arial", "I", 8)
+        pdf.cell(0, 10, "Generated by YouTube Sentiment Dashboard", 0, 0, "C")
+        
+        # Return PDF as bytes using BytesIO
+        buffer = io.BytesIO()
+        
+        # Get PDF output as string
+        pdf_output = pdf.output(dest='S')
+        
+        # Encode to latin-1 with error replacement
+        if isinstance(pdf_output, str):
+            pdf_bytes = pdf_output.encode('latin-1', 'replace')
+        else:
+            pdf_bytes = pdf_output
+        
+        buffer.write(pdf_bytes)
+        buffer.seek(0)
+        
+        return buffer.getvalue()
+        
+    except Exception as e:
+        st.error(f"PDF generation error: {str(e)}")
+        # Create a minimal fallback PDF
         try:
-            pdf_bytes = pdf.output()
-            return pdf_bytes
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 16)
+            pdf.cell(0, 10, "YouTube Sentiment Report", 0, 1, "C")
+            pdf.set_font("Arial", "", 10)
+            pdf.cell(0, 10, f"Video: {video_id}", 0, 1)
+            pdf.cell(0, 10, f"Total Comments: {len(df)}", 0, 1)
+            pdf.cell(0, 10, "Report generated with limited data", 0, 1)
+            
+            buffer = io.BytesIO()
+            pdf_output = pdf.output(dest='S')
+            if isinstance(pdf_output, str):
+                pdf_bytes = pdf_output.encode('latin-1', 'replace')
+            else:
+                pdf_bytes = pdf_output
+            buffer.write(pdf_bytes)
+            buffer.seek(0)
+            return buffer.getvalue()
         except:
-            # Method 3: Ultimate fallback
-            try:
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp:
-                    pdf.output(tmp.name)
-                    with open(tmp.name, 'rb') as f:
-                        pdf_bytes = f.read()
-                return pdf_bytes
-            except Exception as e:
-                st.error(f"Final PDF generation error: {str(e)}")
-                return b"PDF generation failed"
+            # Ultimate fallback
+            return b""
+
+# ============================================
+# TEXT REPORT FALLBACK
+# ============================================
+def create_text_report_fallback(video_id, video_info, df):
+    """Create a simple text-based report as fallback"""
+    try:
+        df_analyzed = analyze_sentiment(df.copy())
+        total_comments = len(df_analyzed)
+        
+        report_text = f"""
+{'=' * 60}
+YouTube Sentiment Analysis Report
+{'=' * 60}
+
+VIDEO INFORMATION
+{'=' * 60}
+Title: {video_info.get('title', 'Unknown Video')}
+Video ID: {video_id}
+Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Total Comments: {total_comments:,}
+
+"""
+        
+        if total_comments > 0:
+            avg_sentiment = df_analyzed["sentiment_score"].mean()
+            positive_pct = (df_analyzed["sentiment"] == "Positive").mean() * 100
+            negative_pct = (df_analyzed["sentiment"] == "Negative").mean() * 100
+            neutral_pct = (df_analyzed["sentiment"] == "Neutral").mean() * 100
+            
+            report_text += f"""
+KEY METRICS
+{'=' * 60}
+Average Sentiment Score: {avg_sentiment:.3f}
+Positive Comments: {positive_pct:.1f}%
+Negative Comments: {negative_pct:.1f}%
+Neutral Comments: {neutral_pct:.1f}%
+
+KEY INSIGHTS
+{'=' * 60}
+"""
+            
+            insights = generate_insights(df_analyzed, video_info["title"])
+            for insight in insights:
+                safe_insight = sanitize_text_for_pdf(insight, method='remove')
+                report_text += f"* {safe_insight}\n"
+            
+            report_text += f"""
+SAMPLE COMMENTS
+{'=' * 60}
+"""
+            
+            for sentiment in ["Positive", "Neutral", "Negative"]:
+                sentiment_comments = df_analyzed[df_analyzed["sentiment"] == sentiment].head(2)
+                if len(sentiment_comments) > 0:
+                    report_text += f"\n{sentiment.upper()} COMMENTS:\n"
+                    for _, row in sentiment_comments.iterrows():
+                        safe_comment = sanitize_text_for_pdf(row["comment"], method='remove')
+                        truncated_comment = safe_comment[:80] + "..." if len(safe_comment) > 80 else safe_comment
+                        report_text += f"  - {truncated_comment}\n"
+            
+            report_text += f"""
+{'=' * 60}
+Report generated by YouTube Sentiment Dashboard
+"""
+        
+        return report_text.encode('utf-8', errors='replace')
+        
+    except Exception as e:
+        return f"Error generating report: {str(e)}".encode('utf-8')
 
 # ============================================
 # UTILITY FUNCTIONS
@@ -532,7 +499,7 @@ def get_video_comments(youtube, video_id, min_comments=500):
             request = youtube.commentThreads().list(
                 part="snippet",
                 videoId=video_id,
-                maxResults=100,  # API maximum per request
+                maxResults=100,
                 pageToken=next_page_token,
                 textFormat="plainText"
             )
@@ -547,10 +514,8 @@ def get_video_comments(youtube, video_id, min_comments=500):
                     "author": snippet.get("authorDisplayName", "Unknown")
                 })
             
-            # Check for more pages
             next_page_token = response.get("nextPageToken")
             if not next_page_token:
-                # No more comments available
                 break
                 
         except Exception as e:
@@ -667,20 +632,20 @@ def generate_insights(df, video_title):
     
     # Overall sentiment insight
     if avg_sentiment > 0.2:
-        insights.append(f"💚 **Very Positive Reception**: Comments show strong positive sentiment (avg: {avg_sentiment:.2f})")
+        insights.append(f"Very Positive Reception: Comments show strong positive sentiment (avg: {avg_sentiment:.2f})")
     elif avg_sentiment > 0:
-        insights.append(f"👍 **Generally Positive**: Overall feedback is positive (avg: {avg_sentiment:.2f})")
+        insights.append(f"Generally Positive: Overall feedback is positive (avg: {avg_sentiment:.2f})")
     elif avg_sentiment < -0.2:
-        insights.append(f"🔴 **Strong Criticism**: Significant negative feedback detected (avg: {avg_sentiment:.2f})")
+        insights.append(f"Strong Criticism: Significant negative feedback detected (avg: {avg_sentiment:.2f})")
     elif avg_sentiment < 0:
-        insights.append(f"⚠️ **Mixed with Concerns**: Some negative feedback present (avg: {avg_sentiment:.2f})")
+        insights.append(f"Mixed with Concerns: Some negative feedback present (avg: {avg_sentiment:.2f})")
     else:
-        insights.append(f"⚖️ **Neutral Dominance**: Comments are mostly neutral or balanced")
+        insights.append(f"Neutral Dominance: Comments are mostly neutral or balanced")
     
     # Distribution insight
     dominant_sentiment = sentiment_counts.idxmax()
     dominant_percent = (sentiment_counts.max() / total_comments) * 100
-    insights.append(f"📊 **{dominant_sentiment} Comments Dominate**: {dominant_percent:.1f}% of all comments")
+    insights.append(f"{dominant_sentiment} Comments Dominate: {dominant_percent:.1f}% of all comments")
     
     # Top negative keywords insight
     if "Negative" in sentiment_counts:
@@ -691,15 +656,15 @@ def generate_insights(df, video_title):
             common_words = Counter(words).most_common(3)
             if common_words:
                 word_list = ", ".join([word for word, _ in common_words])
-                insights.append(f"🔍 **Common Concerns**: Frequent words in negative comments: {word_list}")
+                insights.append(f"Common Concerns: Frequent words in negative comments: {word_list}")
     
     # Engagement insight
     if 'like_count' in df.columns:
         avg_likes = df["like_count"].mean()
         if avg_likes > 10:
-            insights.append(f"🔥 **High Engagement**: Comments average {avg_likes:.0f} likes each")
+            insights.append(f"High Engagement: Comments average {avg_likes:.0f} likes each")
         elif avg_likes > 5:
-            insights.append(f"👏 **Good Engagement**: Comments receive decent likes ({avg_likes:.0f} avg)")
+            insights.append(f"Good Engagement: Comments receive decent likes ({avg_likes:.0f} avg)")
     
     return insights
 
@@ -713,13 +678,10 @@ def create_comparison_chart(video_ids):
     for vid in video_ids:
         if vid in st.session_state.video_data:
             data = st.session_state.video_data[vid]
-            # Ensure sentiment analysis is performed
             df = analyze_sentiment(data["df"].copy())
             
-            # Calculate metrics safely
             total_comments = len(df)
             if total_comments == 0:
-                # Handle empty comment case
                 comparison_data.append({
                     "Video": data.get("title", "Unknown Video")[:30] + "...",
                     "Total Comments": 0,
@@ -748,12 +710,8 @@ def create_comparison_chart(video_ids):
     
     return None
 
-def to_csv_bytes(df):
-    """Convert DataFrame to CSV bytes"""
-    return df.to_csv(index=False).encode("utf-8")
-
 # ============================================
-# REST OF THE ORIGINAL CODE (UNCHANGED)
+# MAIN APP LAYOUT
 # ============================================
 
 # Sidebar
@@ -771,7 +729,7 @@ with col1:
             video_id = extract_video_id(video_url)
             if video_id:
                 if video_id not in st.session_state.current_videos:
-                    with st.spinner(''):
+                    with st.spinner('Fetching video data...'):
                         result = fetch_comments(video_id, video_url)
                         if result:
                             st.session_state.current_videos.append(video_id)
@@ -868,7 +826,6 @@ with tab1:
             insights = generate_insights(df, video_info["title"])
             
             for insight in insights:
-                # Extract emoji for color matching
                 emoji = insight[:2] if insight[:2] in insight_colors else '📌'
                 bg_color = insight_colors.get(emoji, 'linear-gradient(135deg, #6c757d, #495057)')
                 
@@ -898,7 +855,6 @@ with tab1:
             positive_pct = (df["sentiment"] == "Positive").mean() * 100
             engagement = df["like_count"].mean() if "like_count" in df.columns else 0
             
-            # Create metric cards with icons
             metrics_html = f"""
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0;">
                 <div class="metric-card" style="background: linear-gradient(135deg, #4cc9f0, #4361ee);">
@@ -1026,7 +982,6 @@ with tab1:
                 if words:
                     word_counts = Counter(words).most_common(10)
                     pos_words_df = pd.DataFrame(word_counts, columns=['Word', 'Count'])
-                    # Style the dataframe
                     st.dataframe(
                         pos_words_df.style
                         .background_gradient(subset=['Count'], cmap='Greens')
@@ -1042,7 +997,6 @@ with tab1:
                 if words:
                     word_counts = Counter(words).most_common(10)
                     neg_words_df = pd.DataFrame(word_counts, columns=['Word', 'Count'])
-                    # Style the dataframe
                     st.dataframe(
                         neg_words_df.style
                         .background_gradient(subset=['Count'], cmap='Reds')
@@ -1250,13 +1204,10 @@ with tab3:
                             <div style="margin-top: 4px;">
                                 {row.get('author', 'Unknown')}
                                 {' • ' + str(row['like_count']) + ' ❤️' if row.get('like_count', 0) > 0 else ''}
-                            </div>
-                        </div>
-                    </div>
-                    <div style="margin-top: 10px; line-height: 1.6; color: #333;">
+                            
+                    
                         {row['comment'][:400]}{'...' if len(row['comment']) > 400 else ''}
-                    </div>
-                </div>
+                
                 """, unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1349,7 +1300,7 @@ with tab4:
                 if st.button("📊 Generate Report", use_container_width=True, key="report_btn"):
                     with st.spinner("Generating report..."):
                         try:
-                            # Create summary without mixing types in same DataFrame
+                            # Create summary
                             summary_data = {
                                 "Metric": [
                                     "Video Title",
@@ -1378,7 +1329,6 @@ with tab4:
                             summary_df = pd.DataFrame(summary_data)
                             
                             st.markdown("### 📋 Analysis Summary")
-                            # Display the summary in a nicer format
                             st.dataframe(
                                 summary_df,
                                 use_container_width=True,
@@ -1401,41 +1351,34 @@ with tab4:
                 if st.button("📄 Generate PDF Report", use_container_width=True, key="pdf_btn"):
                     with st.spinner("Creating PDF report..."):
                         try:
-                            # Use the safe PDF generation function
-                            pdf_bytes = safe_generate_pdf(selected_video, video_info, df)
+                            pdf_bytes = generate_pdf_report(selected_video, video_info, df)
                             
-                            # Create sanitized filename
-                            safe_filename = sanitize_text_for_pdf(
-                                f"youtube_sentiment_report_{selected_video}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                            )
-                            
-                            # Create download button
-                            st.download_button(
-                                label="📥 Download PDF Report",
-                                data=pdf_bytes,
-                                file_name=safe_filename,
-                                mime="application/pdf",
-                                use_container_width=True,
-                                key="pdf_download"
-                            )
-                            
-                            st.success("✅ PDF report generated successfully!")
-                            
-                            # Show preview of what's in the PDF
-                            with st.expander("📋 PDF Contents Preview"):
-                                st.markdown("""
-                                **Report includes:**
-                                - Google-style cover page with video info
-                                - Executive summary with key metrics
-                                - Auto-generated insights section
-                                - Sentiment distribution charts
-                                - Sample comments by sentiment
-                                - Conclusions and recommendations
-                                - Brand colors throughout
-                                """)
+                            if pdf_bytes:
+                                st.download_button(
+                                    label="📥 Download PDF Report",
+                                    data=pdf_bytes,
+                                    file_name=f"youtube_sentiment_report_{selected_video}.pdf",
+                                    mime="application/pdf",
+                                    use_container_width=True,
+                                    key="pdf_download"
+                                )
+                                
+                                st.success("✅ PDF report generated successfully!")
+                            else:
+                                st.error("Failed to generate PDF report")
                                 
                         except Exception as e:
                             st.error(f"Error generating PDF: {str(e)}")
+                            # Fallback to text report
+                            text_report = create_text_report_fallback(selected_video, video_info, df)
+                            st.download_button(
+                                label="📥 Download Text Report",
+                                data=text_report,
+                                file_name=f"sentiment_report_{selected_video}.txt",
+                                mime="text/plain",
+                                use_container_width=True,
+                                key="txt_download"
+                            )
             
             # Raw Data View
             st.markdown("### 📄 Raw Comment Data")
