@@ -106,64 +106,31 @@ section[data-testid="stSidebar"] {
     border: 1px solid #f0f0f0;
 }
 
-/* FIX FOR MAIN CONTENT INSTRUCTION SECTION - SOLID BACKGROUND */
-div[data-testid="stVerticalBlock"] > div[style*="flex"] > div[data-testid="stVerticalBlock"] {
+/* FIX FOR INSTRUCTION SECTION - REMOVE BLUR/TRANSPARENCY */
+div.element-container:has(div.stInfo) {
     background-color: white !important;
-    background-image: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
 
-/* Specifically target the instruction section */
-div[data-testid="stVerticalBlock"] > div[style*="flex"] > div[data-testid="stVerticalBlock"] > div > div {
-    background-color: white !important;
-}
-
-/* Ensure all children in instruction section have solid backgrounds */
-div[data-testid="stVerticalBlock"] > div[style*="flex"] > div[data-testid="stVerticalBlock"] * {
-    background-color: white !important;
-}
-
-/* Target the specific info container */
 div.stInfo {
     background-color: white !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
 
-/* Target the markdown container in main content when no videos are selected */
-div[data-testid="stMarkdownContainer"] {
-    background-color: white !important;
-}
-
-/* Ensure the section class in main content is solid */
-div.section {
+/* Target the specific div that contains the instruction markdown */
+div.element-container:has(div[data-testid="stMarkdownContainer"]):has(p:contains("How to use:")) {
     background-color: white !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
 
-/* Remove any blur effects from the entire app */
-MainMenu {
-    visibility: hidden;
-}
-
-footer {
-    visibility: hidden;
-}
-
-/* Force solid background for all main content blocks */
-section.main {
+/* Ensure the section div inside has solid background */
+div.section {
     background-color: white !important;
-}
-
-div.block-container {
-    background-color: white !important;
-}
-
-/* Remove any transparency from Streamlit's default theme */
-.stApp {
-    background-color: white !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 }
 </style>
 """, unsafe_allow_html=True)
