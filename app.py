@@ -1223,13 +1223,9 @@ with tab3:
                             <div style="margin-top: 4px;">
                                 {row.get('author', 'Unknown')}
                                 {' • ' + str(row['like_count']) + ' ❤️' if row.get('like_count', 0) > 0 else ''}
-                            </div>
-                        </div>
-                    </div>
-                    <div style="margin-top: 12px; line-height: 1.5; color: #333;">
+                           
                         {row['comment'][:400]}{'...' if len(row['comment']) > 400 else ''}
-                    </div>
-                </div>
+                    
                 """, unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1436,3 +1432,4 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
