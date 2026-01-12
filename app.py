@@ -734,8 +734,8 @@ def create_comparison_chart(video_ids):
 # ============================================
 
 # Sidebar
-st.sidebar.title("🎯 YouTube Sentiment")
-st.sidebar.markdown("---")
+st.sidebar.image("youtube.png", width=32)
+st.sidebar.title("YouTube Sentiment")
 
 # Video input section
 st.sidebar.subheader("📹 Add Videos to Analyze")
@@ -1432,4 +1432,5 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
 
