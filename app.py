@@ -18,30 +18,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-st.markdown("""
-<style>
-
-/* Instructions / How-to section */
-.instructions {
-    background-color: #ffffff !important;
-    color: #111111 !important;
-    padding: 24px;
-    border-radius: 14px;
-    border: 1px solid #e5e7eb;
-}
-
-/* Force text inside */
-.instructions h1,
-.instructions h2,
-.instructions h3,
-.instructions p,
-.instructions li {
-    color: #111111 !important;
-    opacity: 1 !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -130,31 +106,23 @@ section[data-testid="stSidebar"] {
     border: 1px solid #f0f0f0;
 }
 
-/* FIX FOR INSTRUCTION SECTION - REMOVE BLUR/TRANSPARENCY */
-div.element-container:has(div.stInfo) {
-    background-color: white !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+/* Instructions / How-to section */
+.instructions {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    padding: 24px;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
 }
 
-div.stInfo {
-    background-color: white !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-}
-
-/* Target the specific div that contains the instruction markdown */
-div.element-container:has(div[data-testid="stMarkdownContainer"]):has(p:contains("How to use:")) {
-    background-color: white !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-}
-
-/* Ensure the section div inside has solid background */
-div.section {
-    background-color: white !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
+/* Force text inside */
+.instructions h1,
+.instructions h2,
+.instructions h3,
+.instructions p,
+.instructions li {
+    color: #111111 !important;
+    opacity: 1 !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -824,7 +792,7 @@ st.title("📊 YouTube Sentiment Analysis")
 if not st.session_state.current_videos:
     st.info("👈 Add YouTube videos from the sidebar to get started!")
     st.markdown("""
-    <div class="section">
+    <div class="instructions">
     <h3>How to use:</h3>
     <ol>
         <li>Paste a YouTube video URL in the sidebar</li>
@@ -1255,10 +1223,13 @@ with tab3:
                             <div style="margin-top: 4px;">
                                 {row.get('author', 'Unknown')}
                                 {' • ' + str(row['like_count']) + ' ❤️' if row.get('like_count', 0) > 0 else ''}
-                            
-                    
+                            </div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; line-height: 1.5; color: #333;">
                         {row['comment'][:400]}{'...' if len(row['comment']) > 400 else ''}
-                
+                    </div>
+                </div>
                 """, unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1465,4 +1436,3 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
