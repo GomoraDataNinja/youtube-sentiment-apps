@@ -18,6 +18,30 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+st.markdown("""
+<style>
+
+/* Instructions / How-to section */
+.instructions {
+    background-color: #ffffff !important;
+    color: #111111 !important;
+    padding: 24px;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+}
+
+/* Force text inside */
+.instructions h1,
+.instructions h2,
+.instructions h3,
+.instructions p,
+.instructions li {
+    color: #111111 !important;
+    opacity: 1 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -1441,3 +1465,4 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+
