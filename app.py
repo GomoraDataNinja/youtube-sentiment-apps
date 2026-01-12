@@ -105,6 +105,66 @@ section[data-testid="stSidebar"] {
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     border: 1px solid #f0f0f0;
 }
+
+/* FIX FOR MAIN CONTENT INSTRUCTION SECTION - SOLID BACKGROUND */
+div[data-testid="stVerticalBlock"] > div[style*="flex"] > div[data-testid="stVerticalBlock"] {
+    background-color: white !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Specifically target the instruction section */
+div[data-testid="stVerticalBlock"] > div[style*="flex"] > div[data-testid="stVerticalBlock"] > div > div {
+    background-color: white !important;
+}
+
+/* Ensure all children in instruction section have solid backgrounds */
+div[data-testid="stVerticalBlock"] > div[style*="flex"] > div[data-testid="stVerticalBlock"] * {
+    background-color: white !important;
+}
+
+/* Target the specific info container */
+div.stInfo {
+    background-color: white !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Target the markdown container in main content when no videos are selected */
+div[data-testid="stMarkdownContainer"] {
+    background-color: white !important;
+}
+
+/* Ensure the section class in main content is solid */
+div.section {
+    background-color: white !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Remove any blur effects from the entire app */
+MainMenu {
+    visibility: hidden;
+}
+
+footer {
+    visibility: hidden;
+}
+
+/* Force solid background for all main content blocks */
+section.main {
+    background-color: white !important;
+}
+
+div.block-container {
+    background-color: white !important;
+}
+
+/* Remove any transparency from Streamlit's default theme */
+.stApp {
+    background-color: white !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
