@@ -45,26 +45,23 @@ config = load_config()
 def detect_theme():
     """Detect current Streamlit theme"""
     try:
-        # Check if theme is stored in session state
-        if 'current_theme' in st.session_state:
-            return st.session_state.current_theme
+        # Check if theme is manually set in session state
+        if 'theme_mode' in st.session_state:
+            return st.session_state.theme_mode
         
-        # Default theme detection logic
-        # We'll try to detect from CSS variables
-        theme = 'light'  # Default to light
-        
-        # Check if we're in Streamlit Cloud or local
-        try:
-            # This is a workaround for theme detection
-            # Streamlit doesn't expose theme directly in Python
-            # We'll rely on CSS variables that Streamlit sets
-            pass
-        except:
-            pass
-            
-        return theme
+        # Default to light theme
+        return 'light'
     except:
         return 'light'
+
+def toggle_theme():
+    """Toggle between light and dark themes"""
+    current = st.session_state.get('theme_mode', 'light')
+    new_theme = 'dark' if current == 'light' else 'light'
+    st.session_state.theme_mode = new_theme
+    st.session_state.current_theme = new_theme
+    st.rerun()
+    return new_theme
 
 def get_theme_colors(theme=None):
     """Get colors based on theme"""
@@ -108,9 +105,11 @@ def get_theme_colors(theme=None):
             'shadow': "rgba(0, 0, 0, 0.1)"
         }
 
-# Initialize theme
-current_theme = detect_theme()
-st.session_state.current_theme = current_theme
+# Initialize theme in session state
+if 'theme_mode' not in st.session_state:
+    st.session_state.theme_mode = 'light'
+
+current_theme = st.session_state.theme_mode
 COLORS = get_theme_colors(current_theme)
 
 # ==================== SENTIMENT COLORS ====================
@@ -330,7 +329,7 @@ def logout():
         if key in st.session_state:
             del st.session_state[key]
     
-    keep_keys = ['analysis_history', 'export_history']
+    keep_keys = ['analysis_history', 'export_history', 'theme_mode']
     new_state = {k: v for k, v in st.session_state.items() if k in keep_keys}
     
     for key in list(st.session_state.keys()):
@@ -380,6 +379,10 @@ if 'last_activity' not in st.session_state:
     st.session_state.last_activity = datetime.now()
 if 'session_id' not in st.session_state:
     st.session_state.session_id = hashlib.sha256(str(time.time()).encode()).hexdigest()[:16]
+
+# Theme state
+if 'theme_mode' not in st.session_state:
+    st.session_state.theme_mode = 'light'
 
 # YouTube analysis state
 if 'video_data' not in st.session_state:
@@ -519,6 +522,29 @@ st.markdown(f"""
         border: 1px solid rgba(52, 168, 83, 0.3);
     }}
     
+    /* Theme toggle button */
+    .theme-toggle-btn {{
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        background: var(--card-color);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        color: var(--text-color);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }}
+    
+    .theme-toggle-btn:hover {{
+        background: var(--hover-color);
+        border-color: var(--primary-color);
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px var(--shadow-color);
+    }}
+    
     /* Input fields */
     .stTextInput > div > div > input {{
         background-color: var(--card-color);
@@ -642,58 +668,7 @@ st.markdown(f"""
         -moz-osx-font-smoothing: grayscale;
     }}
 </style>
-
-<!-- JavaScript to detect theme changes -->
-<script>
-    // Function to detect Streamlit theme
-    function detectTheme() {{
-        // Check CSS variables or body background
-        const bodyStyle = window.getComputedStyle(document.body);
-        const bgColor = bodyStyle.backgroundColor;
-        
-        // Convert RGB to brightness
-        const rgb = bgColor.match(/\\d+/g);
-        if (rgb) {{
-            const brightness = (parseInt(rgb[0]) * 299 + parseInt(rgb[1]) * 587 + parseInt(rgb[2]) * 114) / 1000;
-            return brightness < 128 ? 'dark' : 'light';
-        }}
-        return 'light';
-    }}
-    
-    // Send theme to Python when it changes
-    function updateTheme() {{
-        const theme = detectTheme();
-        const event = new CustomEvent('setTheme', {{ detail: {{ theme: theme }} }});
-        window.parent.document.dispatchEvent(event);
-    }}
-    
-    // Check for theme changes periodically
-    let lastTheme = detectTheme();
-    setInterval(() => {{
-        const currentTheme = detectTheme();
-        if (currentTheme !== lastTheme) {{
-            lastTheme = currentTheme;
-            updateTheme();
-        }}
-    }}, 1000);
-</script>
 """, unsafe_allow_html=True)
-
-# JavaScript to update theme in session state
-st.components.v1.html("""
-<script>
-    // Listen for theme change events
-    window.addEventListener('setTheme', function(e) {
-        const theme = e.detail.theme;
-        
-        // Send to Streamlit
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: theme
-        }, '*');
-    });
-</script>
-""", height=0)
 
 # ==================== SECURITY MIDDLEWARE ====================
 if st.session_state.authenticated and check_session_timeout():
@@ -982,40 +957,54 @@ border_color = COLORS['border']
 primary_color = COLORS['primary']
 success_color = COLORS['success']
 
-st.markdown(f'''
-    <div style="background: {card_color}; border-bottom: 1px solid {border_color}; 
-                padding: 1.2rem 2.5rem; margin: -2rem -1rem 2rem -1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <div style="display: flex; align-items: center; gap: 12px; color: {primary_color}; 
-                         font-weight: 600; font-size: 22px;">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                        <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" fill="currentColor"/>
-                    </svg>
-                    <span>{APP_NAME}</span>
-                </div>
-                <div style="font-size: 14px; color: {text_light_color};">
-                    v{APP_VERSION} • {DEPLOYMENT_MODE.title()} Mode • {current_theme.title()} Theme
-                </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <div class="user-chip">
-                    <div class="user-avatar">{st.session_state.username[0].upper()}</div>
-                    <div>
-                        <div style="font-weight: 600;">{st.session_state.username}</div>
-                        <div style="font-size: 11px; color: {text_light_color};">
-                            {st.session_state.user_role.upper()} • Session: {st.session_state.session_id}
-                        </div>
-                    </div>
+# Create header with theme toggle
+col1, col2, col3 = st.columns([2, 2, 1])
+with col1:
+    st.markdown(f'''
+        <div style="display: flex; align-items: center; gap: 12px; color: {primary_color}; 
+                 font-weight: 600; font-size: 22px;">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" fill="currentColor"/>
+            </svg>
+            <span>{APP_NAME}</span>
+        </div>
+    ''', unsafe_allow_html=True)
+
+with col2:
+    st.markdown(f'''
+        <div style="font-size: 14px; color: {text_light_color}; padding-top: 8px;">
+            v{APP_VERSION} • {DEPLOYMENT_MODE.title()} Mode • {current_theme.title()} Theme
+        </div>
+    ''', unsafe_allow_html=True)
+
+with col3:
+    # Theme toggle button
+    theme_icon = "🌙" if current_theme == 'light' else "☀️"
+    theme_text = "Dark" if current_theme == 'light' else "Light"
+    
+    if st.button(f"{theme_icon} {theme_text} Mode", 
+                 key="theme_toggle",
+                 use_container_width=True):
+        toggle_theme()
+
+st.markdown("---")
+
+# User info and logout
+col1, col2, col3 = st.columns([3, 2, 2])
+with col1:
+    st.markdown(f'''
+        <div class="user-chip">
+            <div class="user-avatar">{st.session_state.username[0].upper()}</div>
+            <div>
+                <div style="font-weight: 600;">{st.session_state.username}</div>
+                <div style="font-size: 11px; color: {text_light_color};">
+                    {st.session_state.user_role.upper()} • Session: {st.session_state.session_id}
                 </div>
             </div>
         </div>
-    </div>
-''', unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
 
-# Logout button
-col1, col2, col3 = st.columns([4, 2, 4])
-with col2:
+with col3:
     if st.button("🚪 Secure Logout", key="logout_button", type="secondary", use_container_width=True):
         logout()
 
@@ -1023,8 +1012,7 @@ st.markdown("---")
 
 # ==================== SIDEBAR ====================
 with st.sidebar:
-    # Fixed the f-string by using variables
-    header_html = f'''
+    st.markdown(f'''
     <div style="padding: 20px; border-bottom: 1px solid {border_color}; 
                 background: {card_color}; border-radius: 8px; margin-bottom: 20px;">
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
@@ -1038,8 +1026,19 @@ with st.sidebar:
             <div><strong>Role:</strong> {st.session_state.user_role}</div>
         </div>
     </div>
-    '''
-    st.markdown(header_html, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
+    
+    # Theme toggle in sidebar
+    theme_icon = "🌙" if current_theme == 'light' else "☀️"
+    theme_text = "Switch to Dark" if current_theme == 'light' else "Switch to Light"
+    
+    if st.button(f"{theme_icon} {theme_text}", 
+                 key="sidebar_theme_toggle",
+                 use_container_width=True,
+                 type="primary"):
+        toggle_theme()
+    
+    st.markdown("---")
     
     # Video Management Section
     st.markdown(f"<h3 style='color: {text_color}; margin: 25px 0 15px 0;'>🎬 Video Management</h3>", unsafe_allow_html=True)
@@ -1145,6 +1144,10 @@ with st.sidebar:
                 <span>Mode:</span>
                 <span style="color: {text_light_color};">{DEPLOYMENT_MODE}</span>
             </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>Theme:</span>
+                <span style="color: {text_light_color};">{current_theme.title()}</span>
+            </div>
         </div>
     </div>
     '''
@@ -1192,8 +1195,8 @@ if st.session_state.current_videos:
     with col4:
         st.markdown(f'''
             <div class="metric-card">
-                <div class="metric-label">Security Status</div>
-                <div class="metric-value" style="color: {success_color};">✓</div>
+                <div class="metric-label">Theme</div>
+                <div class="metric-value">{current_theme.title()}</div>
             </div>
         ''', unsafe_allow_html=True)
     
@@ -1213,7 +1216,7 @@ if not st.session_state.current_videos:
                 <div style="display: inline-flex; align-items: center; gap: 8px; 
                          padding: 10px 20px; background: {primary_color}; 
                          color: white; border-radius: 8px; font-weight: 500;">
-                    🔒 Secure Session Active
+                    🔒 Secure Session Active • {current_theme.title()} Theme
                 </div>
             </div>
         </div>
@@ -1250,7 +1253,7 @@ with tab1:
                         <h3 style="color: {text_color}; margin: 0 0 10px 0;">🔍 Key Insights</h3>
                         <p style="color: {text_light_color}; margin: 0;">Analysis of: {video_info["title"][:60]}...</p>
                     </div>
-                    <div class="status-indicator">● Active</div>
+                    <div class="status-indicator">● Active • {current_theme.title()}</div>
                 </div>
             </div>
             '''
@@ -1609,7 +1612,7 @@ with tab5:
                     <h3 style="color: {text_color}; margin: 0 0 10px 0;">📤 Export Results</h3>
                     <p style="color: {text_light_color}; margin: 0;">Export analysis results securely</p>
                 </div>
-                <div class="status-indicator">🔐 Secure Export</div>
+                <div class="status-indicator">🔐 Secure Export • {current_theme.title()}</div>
             </div>
         </div>
         '''
@@ -1806,6 +1809,7 @@ footer_html = f'''
         <span>User: {st.session_state.username}</span>
         <span>Role: {st.session_state.user_role.upper()}</span>
         <span>Session: {st.session_state.session_id}</span>
+        <span>Theme: {current_theme.title()}</span>
     </div>
     <div style="font-size: 11px; color: {COLORS['neutral']};">
         © 2024 YouTube Sentiment Analysis Dashboard • All rights reserved
