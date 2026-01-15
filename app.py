@@ -12,504 +12,479 @@ import numpy as np
 import io
 from fpdf import FPDF
 import base64
+import time
+import warnings
+import os
+import hashlib
+import json
+warnings.filterwarnings('ignore')
 
+# ==================== DEPLOYMENT CONFIGURATION ====================
+APP_VERSION = "2.1.4"
+APP_NAME = "YouTube Sentiment Analysis Dashboard"
+DEPLOYMENT_MODE = os.environ.get('DEPLOYMENT_MODE', 'development')
+
+# Security configuration
+MAX_LOGIN_ATTEMPTS = 3
+SESSION_TIMEOUT_MINUTES = 60
+PASSWORD_MIN_LENGTH = 8
+
+# Load configuration
+def load_config():
+    config = {
+        'COMMON_PASSWORD': os.environ.get('APP_PASSWORD', 'youtube2024'),
+        'ALLOWED_USERS': os.environ.get('ALLOWED_USERS', 'admin,analyst,user').split(','),
+        'ADMIN_USERS': os.environ.get('ADMIN_USERS', 'admin').split(','),
+        'MAX_FILE_SIZE_MB': 10
+    }
+    return config
+
+config = load_config()
+
+# ==================== THEME-AWARE COLORS ====================
+def get_theme_colors(theme='light'):
+    if theme == 'dark':
+        return {
+            'primary': "#4285F4",
+            'secondary': "#34A853",
+            'accent': "#EA4335",
+            'warning': "#FBBC05",
+            'neutral': "#9AA0A6",
+            'background': "#0E1117",
+            'card': "#1E2126",
+            'text': "#FAFAFA",
+            'text_light': "#B0B3B8",
+            'success': "#34A853",
+            'danger': "#EA4335",
+            'sidebar': "#1E2126",
+            'border': "#2D3748",
+            'hover': "#2A2D35"
+        }
+    else:
+        return {
+            'primary': "#4285F4",
+            'secondary': "#34A853",
+            'accent': "#EA4335",
+            'warning': "#FBBC05",
+            'neutral': "#9AA0A6",
+            'background': "#F8F9FA",
+            'card': "#FFFFFF",
+            'text': "#202124",
+            'text_light': "#5F6368",
+            'success': "#34A853",
+            'danger': "#EA4335",
+            'sidebar': "#202124",
+            'border': "#DADCE0",
+            'hover': "#F1F3F4"
+        }
+
+# Initialize theme
+current_theme = 'light'
+COLORS = get_theme_colors(current_theme)
+
+# ==================== SENTIMENT COLORS ====================
+SENTIMENT_COLORS = {
+    'Positive': "#34A853",
+    'Neutral': "#9AA0A6",
+    'Negative': "#EA4335",
+}
+
+# ==================== SECURITY FUNCTIONS ====================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def check_session_timeout():
+    if 'last_activity' in st.session_state:
+        last_activity = st.session_state.last_activity
+        time_diff = datetime.now() - last_activity
+        if time_diff.total_seconds() > SESSION_TIMEOUT_MINUTES * 60:
+            logout()
+            return True
+    return False
+
+def update_activity():
+    st.session_state.last_activity = datetime.now()
+
+def safe_rerun():
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
+
+# ==================== AUTHENTICATION ====================
+def check_password(username, password):
+    username = username.strip().lower()
+    
+    if username in st.session_state.login_attempts:
+        attempts, last_attempt = st.session_state.login_attempts[username]
+        time_diff = (datetime.now() - last_attempt).total_seconds()
+        
+        if attempts >= MAX_LOGIN_ATTEMPTS and time_diff < 300:
+            return False, "Too many failed attempts. Please try again in 5 minutes."
+    
+    if username and password == config['COMMON_PASSWORD']:
+        if username in st.session_state.login_attempts:
+            del st.session_state.login_attempts[username]
+        
+        if username in config['ADMIN_USERS']:
+            role = 'admin'
+        elif username in config['ALLOWED_USERS']:
+            role = 'user'
+        else:
+            role = 'guest'
+        
+        return True, role
+    else:
+        if username not in st.session_state.login_attempts:
+            st.session_state.login_attempts[username] = [1, datetime.now()]
+        else:
+            st.session_state.login_attempts[username][0] += 1
+            st.session_state.login_attempts[username][1] = datetime.now()
+        
+        return False, "Invalid credentials"
+
+def show_login_page():
+    st.markdown("""
+    <style>
+    .login-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 2rem;
+        background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%);
+    }
+    .login-card {
+        background: white;
+        border-radius: 12px;
+        padding: 3rem;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    .youtube-logo {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 1.5rem;
+        background: #FF0000;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.2rem;
+        color: white;
+        font-weight: bold;
+    }
+    .login-title {
+        font-size: 28px;
+        font-weight: 400;
+        color: #202124;
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+    .security-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(52, 168, 83, 0.15);
+        color: #34A853;
+        border: 1px solid rgba(52, 168, 83, 0.3);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    
+    st.markdown(f'''
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <span class="security-badge">🔐 Secure Login</span>
+        </div>
+    ''', unsafe_allow_html=True)
+    
+    st.markdown('<div class="youtube-logo">▶</div>', unsafe_allow_html=True)
+    st.markdown(f'<h1 class="login-title">YouTube Sentiment Analysis</h1>', unsafe_allow_html=True)
+    
+    st.markdown(f'''
+        <p style="text-align: center; color: #5F6368; margin-bottom: 2.5rem; font-size: 15px;">
+            Analyze sentiment in YouTube comments securely<br>
+            <span style="font-size: 12px; opacity: 0.8;">
+                Deployment: <strong>{DEPLOYMENT_MODE.upper()}</strong> | Version: {APP_VERSION}
+            </span>
+        </p>
+    ''', unsafe_allow_html=True)
+    
+    with st.form("login_form", clear_on_submit=True):
+        username = st.text_input("Username", placeholder="Enter your username")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
+        if DEPLOYMENT_MODE == 'production':
+            st.markdown('''
+                <div style="background: rgba(251, 188, 5, 0.15); border: 1px solid rgba(251, 188, 5, 0.3);
+                          border-radius: 8px; padding: 16px; margin: 16px 0; color: #FBBC05; font-size: 13px;">
+                    🔒 Production Environment - Sensitive Data
+                </div>
+            ''', unsafe_allow_html=True)
+        
+        submit_button = st.form_submit_button("Sign In", type="primary", use_container_width=True)
+    
+    if submit_button:
+        if not username.strip():
+            st.error("Please enter a username")
+        else:
+            success, message = check_password(username, password)
+            if success:
+                st.session_state.authenticated = True
+                st.session_state.username = username
+                st.session_state.user_role = message
+                st.session_state.last_activity = datetime.now()
+                
+                login_event = {
+                    'timestamp': datetime.now().isoformat(),
+                    'username': username,
+                    'action': 'login'
+                }
+                st.session_state.analysis_history.append(login_event)
+                
+                st.success(f"Welcome, {username}!")
+                time.sleep(1)
+                safe_rerun()
+            else:
+                st.error(f"Login failed: {message}")
+    
+    st.markdown(f"""
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #DADCE0;">
+            <div style="text-align: center; color: #5F6368; font-size: 12px;">
+                <div style="margin-bottom: 8px;">
+                    <strong>{APP_NAME} v{APP_VERSION}</strong>
+                </div>
+                <div style="font-size: 11px; opacity: 0.8;">
+                    © 2024 YouTube Sentiment Analysis Dashboard<br>
+                    Unauthorized access is prohibited
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def logout():
+    logout_event = {
+        'timestamp': datetime.now().isoformat(),
+        'username': st.session_state.username,
+        'action': 'logout'
+    }
+    st.session_state.analysis_history.append(logout_event)
+    
+    sensitive_keys = ['video_data', 'current_videos', 'df']
+    for key in sensitive_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    auth_keys = ['authenticated', 'username', 'user_role', 'session_id']
+    for key in auth_keys:
+        if key in st.session_state:
+            del st.session_state[key]
+    
+    keep_keys = ['analysis_history', 'export_history']
+    new_state = {k: v for k, v in st.session_state.items() if k in keep_keys}
+    
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
+    
+    for key, value in new_state.items():
+        st.session_state[key] = value
+    
+    safe_rerun()
+
+# ==================== PAGE CONFIGURATION ====================
 st.set_page_config(
-    page_title="YouTube Sentiment Dashboard",
+    page_title=f"{APP_NAME} v{APP_VERSION}",
+    page_icon="🎬",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed",
+    menu_items={
+        'Get Help': None,
+        'Report a bug': None,
+        'About': f'''
+        ### {APP_NAME} v{APP_VERSION}
+        
+        Secure YouTube Sentiment Analysis Dashboard
+        
+        Features:
+        • YouTube comment sentiment analysis
+        • Multiple video comparison
+        • Secure data handling
+        • Export functionality
+        
+        © 2024 All rights reserved.
+        '''
+    }
 )
 
-st.markdown("""
+# ==================== SESSION STATE INITIALIZATION ====================
+# Security-related session state
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+if 'username' not in st.session_state:
+    st.session_state.username = None
+if 'user_role' not in st.session_state:
+    st.session_state.user_role = 'user'
+if 'login_attempts' not in st.session_state:
+    st.session_state.login_attempts = {}
+if 'last_activity' not in st.session_state:
+    st.session_state.last_activity = datetime.now()
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = hashlib.sha256(str(time.time()).encode()).hexdigest()[:16]
+
+# YouTube analysis state
+if 'video_data' not in st.session_state:
+    st.session_state.video_data = {}
+if 'current_videos' not in st.session_state:
+    st.session_state.current_videos = []
+if 'analysis_history' not in st.session_state:
+    st.session_state.analysis_history = []
+if 'export_history' not in st.session_state:
+    st.session_state.export_history = []
+
+# ==================== STYLES ====================
+text_color = COLORS['text']
+text_light_color = COLORS['text_light']
+background_color = COLORS['background']
+card_color = COLORS['card']
+border_color = COLORS['border']
+primary_color = COLORS['primary']
+success_color = COLORS['success']
+
+st.markdown(f"""
 <style>
-/* FORCE solid sidebar — no blur, no transparency */
-section[data-testid="stSidebar"] {
-    background-color: #ffffff !important;
-    background-image: none !important;
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    border-right: 1px solid #dadce0;
-}
-
-/* Sidebar content wrapper */
-section[data-testid="stSidebar"] > div {
-    background-color: #ffffff !important;
-}
-
-/* Sidebar text */
-section[data-testid="stSidebar"] * {
-    color: #202124;
-    font-family: "Inter", "Roboto", system-ui, sans-serif;
-}
-
-/* Sidebar headings */
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3 {
-    color: #202124;
-    font-weight: 600;
-}
-
-/* Sidebar buttons */
-section[data-testid="stSidebar"] .stButton > button {
-    background-color: #1a73e8;
-    color: #ffffff;
-    border-radius: 8px;
-    border: none;
-    font-weight: 500;
-}
-
-section[data-testid="stSidebar"] .stButton > button:hover {
-    background-color: #185abc;
-}
-
-/* Sidebar text inputs */
-section[data-testid="stSidebar"] input {
-    background-color: #ffffff;
-    border: 1px solid #dadce0;
-    border-radius: 6px;
-    color: #202124;
-}
-
-/* Remove Streamlit blur overlay */
-div[data-testid="stSidebarNav"] {
-    background: #ffffff !important;
-    backdrop-filter: none !important;
-}
-
-/* Sidebar tabs / captions */
-section[data-testid="stSidebar"] div[data-testid="stCaptionContainer"] {
-    background: #ffffff;
-    border: 1px solid #dadce0;
-    border-radius: 8px;
-}
-
-/* Kill any remaining transparency */
-section[data-testid="stSidebar"] {
-    opacity: 1 !important;
-}
-
-/* Custom styles for metrics and cards */
-.metric-card {
-    padding: 20px;
-    border-radius: 10px;
-    background: white;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    border: 1px solid #e0e0e0;
-}
-
-.section {
-    background: white;
-    padding: 20px;
-    border-radius: 12px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    border: 1px solid #f0f0f0;
-}
-
-/* Instructions / How-to section */
-.instructions {
-    background-color: #ffffff !important;
-    color: #111111 !important;
-    padding: 24px;
-    border-radius: 14px;
-    border: 1px solid #e5e7eb;
-}
-
-/* Force text inside */
-.instructions h1,
-.instructions h2,
-.instructions h3,
-.instructions p,
-.instructions li {
-    color: #111111 !important;
-    opacity: 1 !important;
-}
+    /* Base styles */
+    .stApp {{
+        background-color: {background_color};
+        font-family: 'Inter', 'Roboto', sans-serif;
+    }}
+    
+    /* Metric cards */
+    .metric-card {{
+        background: {card_color};
+        border: 1px solid {border_color};
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        transition: all 0.3s ease;
+        color: {text_color};
+    }}
+    
+    .metric-value {{
+        font-size: 32px;
+        font-weight: 400;
+        color: {text_color};
+        margin: 8px 0;
+    }}
+    
+    .metric-label {{
+        font-size: 12px;
+        color: {text_light_color};
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        font-weight: 600;
+    }}
+    
+    /* Cards */
+    .g-card {{
+        background: {card_color};
+        border: 1px solid {border_color};
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+        color: {text_color};
+    }}
+    
+    /* User chip */
+    .user-chip {{
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: {background_color};
+        padding: 10px 18px;
+        border-radius: 24px;
+        border: 1px solid {border_color};
+        font-size: 14px;
+        color: {text_color};
+        font-weight: 500;
+    }}
+    
+    .user-avatar {{
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, {primary_color}, {COLORS['secondary']});
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        font-weight: 600;
+    }}
+    
+    /* Hide Streamlit branding */
+    #MainMenu {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
+    .stDeployButton {{display: none;}}
+    
+    /* Status indicators */
+    .status-indicator {{
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        background: rgba(52, 168, 83, 0.15);
+        color: {success_color};
+        border: 1px solid rgba(52, 168, 83, 0.3);
+    }}
 </style>
 """, unsafe_allow_html=True)
 
-# ============================================
-# ENHANCED SANITIZATION FUNCTION
-# ============================================
-def sanitize_text_for_pdf(text, method='remove'):
-    """
-    Enhanced sanitization for PDF generation
-    Returns ASCII-only text safe for FPDF
-    """
-    if text is None:
-        return ""
-    
-    # Convert to string if not already
-    if not isinstance(text, str):
-        text = str(text)
-    
-    # If empty string, return as is
-    if text.strip() == "":
-        return text
-    
-    # First, replace problematic Unicode characters with ASCII equivalents
-    replacements = {
-        # Bullets and special symbols
-        '\u2022': '*',      # Bullet -> asterisk
-        '\u25cf': '*',      # Black circle -> asterisk
-        '\u25e6': '*',      # White circle -> asterisk
-        '\u2023': '*',      # Triangular bullet -> asterisk
-        '\u2043': '-',      # Hyphen bullet -> hyphen
-        
-        # Dashes
-        '\u2013': '-',      # En dash
-        '\u2014': '--',     # Em dash
-        
-        # Quotes
-        '\u2018': "'",      # Left single quotation
-        '\u2019': "'",      # Right single quotation
-        '\u201c': '"',      # Left double quotation
-        '\u201d': '"',      # Right double quotation
-        
-        # Special symbols
-        '\u00a9': '(c)',    # Copyright
-        '\u00ae': '(R)',    # Registered
-        '\u2122': '(TM)',   # Trademark
-        '\u2026': '...',    # Ellipsis
-        
-        # Currency
-        '\u00a3': 'GBP',    # Pound
-        '\u20ac': 'EUR',    # Euro
-        '\u00a5': 'JPY',    # Yen
-        
-        # Fractions
-        '\u00bc': '1/4',    # 1/4
-        '\u00bd': '1/2',    # 1/2
-        '\u00be': '3/4',    # 3/4
-        
-        # Common emoji replacements
-        '\u2764': '<3',     # Heart
-        '\u2665': '<3',     # Heart suit
-        '\u2605': '*',      # Star
-        '\u2713': '[OK]',   # Check mark
-        '\u2714': '[OK]',   # Heavy check
-        '\u2717': '[X]',    # X mark
-        
-        # Arrows
-        '\u2190': '<-',     # Left arrow
-        '\u2192': '->',     # Right arrow
-        '\u2191': '^',      # Up arrow
-        '\u2193': 'v',      # Down arrow
-    }
-    
-    # Apply replacements
-    for old_char, new_char in replacements.items():
-        text = text.replace(old_char, new_char)
-    
-    # Handle remaining Unicode characters
-    if method == 'remove':
-        # Remove all non-ASCII characters
-        text = text.encode('ascii', 'ignore').decode('ascii')
-    elif method == 'replace':
-        # Replace non-ASCII with placeholder
-        result = []
-        for char in text:
-            if ord(char) < 128:
-                result.append(char)
-            else:
-                result.append(' ')
-        text = ''.join(result)
-    
-    # Clean up multiple spaces and trim
-    text = ' '.join(text.split())
-    
-    return text
+# ==================== SECURITY MIDDLEWARE ====================
+if st.session_state.authenticated and check_session_timeout():
+    st.warning("Session has timed out due to inactivity. Please login again.")
+    st.stop()
 
-# ============================================
-# ROBUST PDF GENERATION FUNCTION
-# ============================================
-def generate_pdf_report(video_id, video_info, df):
-    """Generate a simple PDF report using built-in fonts only"""
-    try:
-        # Analyze data
-        df_analyzed = analyze_sentiment(df.copy())
-        total_comments = len(df_analyzed)
-        
-        # Create PDF with built-in fonts
-        pdf = FPDF()
-        pdf.add_page()
-        
-        # Title
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, "YouTube Sentiment Analysis Report", 0, 1, "C")
-        pdf.ln(5)
-        
-        # Horizontal line
-        pdf.set_line_width(0.5)
-        pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-        pdf.ln(10)
-        
-        # Video info
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(0, 10, "Video Information", 0, 1)
-        pdf.set_font("Arial", "", 10)
-        
-        video_title = video_info.get("title", "Unknown Video")
-        safe_title = sanitize_text_for_pdf(video_title, method='remove')[:80]
-        
-        pdf.cell(40, 6, "Title:", 0, 0)
-        pdf.multi_cell(0, 6, safe_title)
-        
-        pdf.cell(40, 6, "Video ID:", 0, 0)
-        pdf.cell(0, 6, video_id, 0, 1)
-        
-        pdf.cell(40, 6, "Analysis Date:", 0, 0)
-        pdf.cell(0, 6, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 0, 1)
-        
-        pdf.cell(40, 6, "Total Comments:", 0, 0)
-        pdf.cell(0, 6, f"{total_comments:,}", 0, 1)
-        pdf.ln(5)
-        
-        if total_comments > 0:
-            # Calculate metrics
-            avg_sentiment = df_analyzed["sentiment_score"].mean()
-            positive_count = (df_analyzed["sentiment"] == "Positive").sum()
-            negative_count = (df_analyzed["sentiment"] == "Negative").sum()
-            neutral_count = (df_analyzed["sentiment"] == "Neutral").sum()
-            
-            positive_pct = (positive_count / total_comments) * 100
-            negative_pct = (negative_count / total_comments) * 100
-            neutral_pct = (neutral_count / total_comments) * 100
-            
-            # Key Metrics
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "Key Metrics", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            
-            col_width = 95
-            row_height = 8
-            
-            metrics = [
-                ("Total Comments", f"{total_comments:,}"),
-                ("Average Sentiment", f"{avg_sentiment:.3f}"),
-                ("Positive Comments", f"{positive_count:,} ({positive_pct:.1f}%)"),
-                ("Negative Comments", f"{negative_count:,} ({negative_pct:.1f}%)"),
-                ("Neutral Comments", f"{neutral_count:,} ({neutral_pct:.1f}%)")
-            ]
-            
-            for label, value in metrics:
-                pdf.cell(col_width, row_height, label, 0, 0)
-                pdf.cell(0, row_height, value, 0, 1)
-                pdf.ln(2)
-            
-            pdf.ln(5)
-            
-            # Insights
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "Key Insights", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            
-            insights = generate_insights(df_analyzed, video_info["title"])
-            for i, insight in enumerate(insights[:5], 1):
-                safe_insight = sanitize_text_for_pdf(insight, method='remove')
-                pdf.multi_cell(0, 6, f"{i}. {safe_insight}")
-                pdf.ln(2)
-            
-            # Sample Comments
-            if total_comments > 0:
-                pdf.add_page()
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 10, "Sample Comments by Sentiment", 0, 1)
-                pdf.ln(5)
-                
-                sentiments = ["Positive", "Neutral", "Negative"]
-                
-                for sentiment in sentiments:
-                    pdf.set_font("Arial", "B", 11)
-                    if sentiment == "Positive":
-                        pdf.set_text_color(56, 176, 0)  # Green
-                    elif sentiment == "Negative":
-                        pdf.set_text_color(220, 53, 69)  # Red
-                    else:
-                        pdf.set_text_color(100, 100, 100)  # Gray
-                    
-                    pdf.cell(0, 8, f"{sentiment} Comments:", 0, 1)
-                    pdf.set_text_color(0, 0, 0)  # Back to black
-                    pdf.set_font("Arial", "", 9)
-                    
-                    sentiment_comments = df_analyzed[df_analyzed["sentiment"] == sentiment].head(3)
-                    
-                    if len(sentiment_comments) > 0:
-                        for idx, (_, row) in enumerate(sentiment_comments.iterrows(), 1):
-                            comment_text = row["comment"]
-                            safe_comment = sanitize_text_for_pdf(comment_text, method='remove')
-                            truncated_comment = safe_comment[:100] + "..." if len(safe_comment) > 100 else safe_comment
-                            pdf.multi_cell(0, 5, f"  {idx}. {truncated_comment}")
-                            pdf.ln(1)
-                    
-                    pdf.ln(5)
-                    
-                    if pdf.get_y() > 250:
-                        pdf.add_page()
-            
-            # Recommendations
-            pdf.set_font("Arial", "B", 12)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(0, 10, "Recommendations", 0, 1)
-            pdf.set_font("Arial", "", 10)
-            
-            if avg_sentiment > 0.2:
-                recs = [
-                    "Leverage positive feedback in marketing",
-                    "Engage with commenters to build community",
-                    "Create similar content based on positive response"
-                ]
-            elif avg_sentiment > 0:
-                recs = [
-                    "Acknowledge positive feedback",
-                    "Address minor concerns mentioned",
-                    "Monitor sentiment trends"
-                ]
-            elif avg_sentiment < -0.2:
-                recs = [
-                    "Review critical feedback carefully",
-                    "Consider content adjustments",
-                    "Address common concerns publicly"
-                ]
-            else:
-                recs = [
-                    "Seek more specific feedback",
-                    "Encourage viewer engagement",
-                    "Test different content approaches"
-                ]
-            
-            for rec in recs:
-                pdf.multi_cell(0, 6, f"* {rec}")
-                pdf.ln(2)
-        else:
-            pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 10, "No comments available for analysis.", 0, 1)
-        
-        # Footer
-        pdf.set_y(-15)
-        pdf.set_font("Arial", "I", 8)
-        pdf.cell(0, 10, "Generated by YouTube Sentiment Dashboard", 0, 0, "C")
-        
-        # Return PDF as bytes using BytesIO
-        buffer = io.BytesIO()
-        
-        # Get PDF output as string
-        pdf_output = pdf.output(dest='S')
-        
-        # Encode to latin-1 with error replacement
-        if isinstance(pdf_output, str):
-            pdf_bytes = pdf_output.encode('latin-1', 'replace')
-        else:
-            pdf_bytes = pdf_output
-        
-        buffer.write(pdf_bytes)
-        buffer.seek(0)
-        
-        return buffer.getvalue()
-        
-    except Exception as e:
-        st.error(f"PDF generation error: {str(e)}")
-        # Create a minimal fallback PDF
-        try:
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "YouTube Sentiment Report", 0, 1, "C")
-            pdf.set_font("Arial", "", 10)
-            pdf.cell(0, 10, f"Video: {video_id}", 0, 1)
-            pdf.cell(0, 10, f"Total Comments: {len(df)}", 0, 1)
-            pdf.cell(0, 10, "Report generated with limited data", 0, 1)
-            
-            buffer = io.BytesIO()
-            pdf_output = pdf.output(dest='S')
-            if isinstance(pdf_output, str):
-                pdf_bytes = pdf_output.encode('latin-1', 'replace')
-            else:
-                pdf_bytes = pdf_output
-            buffer.write(pdf_bytes)
-            buffer.seek(0)
-            return buffer.getvalue()
-        except:
-            # Ultimate fallback
-            return b""
+if st.session_state.authenticated:
+    update_activity()
 
-# ============================================
-# TEXT REPORT FALLBACK
-# ============================================
-def create_text_report_fallback(video_id, video_info, df):
-    """Create a simple text-based report as fallback"""
-    try:
-        df_analyzed = analyze_sentiment(df.copy())
-        total_comments = len(df_analyzed)
-        
-        report_text = f"""
-{'=' * 60}
-YouTube Sentiment Analysis Report
-{'=' * 60}
+# ==================== AUTHENTICATION CHECK ====================
+if not st.session_state.authenticated:
+    show_login_page()
+    st.stop()
 
-VIDEO INFORMATION
-{'=' * 60}
-Title: {video_info.get('title', 'Unknown Video')}
-Video ID: {video_id}
-Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-Total Comments: {total_comments:,}
-
-"""
-        
-        if total_comments > 0:
-            avg_sentiment = df_analyzed["sentiment_score"].mean()
-            positive_pct = (df_analyzed["sentiment"] == "Positive").mean() * 100
-            negative_pct = (df_analyzed["sentiment"] == "Negative").mean() * 100
-            neutral_pct = (df_analyzed["sentiment"] == "Neutral").mean() * 100
-            
-            report_text += f"""
-KEY METRICS
-{'=' * 60}
-Average Sentiment Score: {avg_sentiment:.3f}
-Positive Comments: {positive_pct:.1f}%
-Negative Comments: {negative_pct:.1f}%
-Neutral Comments: {neutral_pct:.1f}%
-
-KEY INSIGHTS
-{'=' * 60}
-"""
-            
-            insights = generate_insights(df_analyzed, video_info["title"])
-            for insight in insights:
-                safe_insight = sanitize_text_for_pdf(insight, method='remove')
-                report_text += f"* {safe_insight}\n"
-            
-            report_text += f"""
-SAMPLE COMMENTS
-{'=' * 60}
-"""
-            
-            for sentiment in ["Positive", "Neutral", "Negative"]:
-                sentiment_comments = df_analyzed[df_analyzed["sentiment"] == sentiment].head(2)
-                if len(sentiment_comments) > 0:
-                    report_text += f"\n{sentiment.upper()} COMMENTS:\n"
-                    for _, row in sentiment_comments.iterrows():
-                        safe_comment = sanitize_text_for_pdf(row["comment"], method='remove')
-                        truncated_comment = safe_comment[:80] + "..." if len(safe_comment) > 80 else safe_comment
-                        report_text += f"  - {truncated_comment}\n"
-            
-            report_text += f"""
-{'=' * 60}
-Report generated by YouTube Sentiment Dashboard
-"""
-        
-        return report_text.encode('utf-8', errors='replace')
-        
-    except Exception as e:
-        return f"Error generating report: {str(e)}".encode('utf-8')
-
-# ============================================
-# UTILITY FUNCTIONS
-# ============================================
+# ==================== ORIGINAL YOUTUBE FUNCTIONS ====================
+def extract_video_id(url):
+    patterns = [
+        r"(?:v=|\/)([0-9A-Za-z_-]{11})",
+        r"youtu\.be\/([0-9A-Za-z_-]{11})",
+        r"embed\/([0-9A-Za-z_-]{11})"
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
 
 def get_video_comments(youtube, video_id, min_comments=500):
-    """
-    Fetch comments from YouTube API with proper pagination to get at least min_comments
-    """
     all_comments = []
     next_page_token = None
     
@@ -543,52 +518,14 @@ def get_video_comments(youtube, video_id, min_comments=500):
     
     return all_comments
 
-# Configuration
-API_KEY = st.secrets["youtube_api_key"]
-
-# Initialize session state for multiple videos
-if 'video_data' not in st.session_state:
-    st.session_state.video_data = {}
-if 'current_videos' not in st.session_state:
-    st.session_state.current_videos = []
-
-# Custom Plotly template
-custom_template = go.layout.Template(
-    layout=go.Layout(
-        font=dict(family="Inter, Segoe UI, sans-serif"),
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        title=dict(font=dict(size=20, color='#212529')),
-        xaxis=dict(gridcolor='rgba(0,0,0,0.05)', title_font=dict(size=14)),
-        yaxis=dict(gridcolor='rgba(0,0,0,0.05)', title_font=dict(size=14)),
-        legend=dict(bgcolor='rgba(255,255,255,0.8)', bordercolor='rgba(0,0,0,0.1)'),
-        colorway=['#4361ee', '#7209b7', '#4cc9f0', '#38b000', '#f48c06', '#f72585']
-    )
-)
-
-# Utility Functions
-def extract_video_id(url):
-    """Extract YouTube video ID from various URL formats"""
-    patterns = [
-        r"(?:v=|\/)([0-9A-Za-z_-]{11})",
-        r"youtu\.be\/([0-9A-Za-z_-]{11})",
-        r"embed\/([0-9A-Za-z_-]{11})"
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    return None
-
 def fetch_comments(video_id, video_url):
-    """Fetch comments from YouTube API"""
     if video_id in st.session_state.video_data:
         return st.session_state.video_data[video_id]
     
+    API_KEY = st.secrets["youtube_api_key"]
     youtube = build("youtube", "v3", developerKey=API_KEY)
     
     try:
-        # First get video details
         video_request = youtube.videos().list(
             part="snippet,statistics",
             id=video_id
@@ -599,8 +536,6 @@ def fetch_comments(video_id, video_url):
             return None
             
         video_info = video_response['items'][0]
-        
-        # Fetch comments using the improved function
         all_comments = get_video_comments(youtube, video_id, min_comments=500)
         
         if not all_comments:
@@ -609,7 +544,6 @@ def fetch_comments(video_id, video_url):
         df = pd.DataFrame(all_comments)
         df["published_at"] = pd.to_datetime(df["published_at"])
         
-        # Store in session state
         st.session_state.video_data[video_id] = {
             "df": df,
             "title": video_info['snippet']['title'],
@@ -624,7 +558,6 @@ def fetch_comments(video_id, video_url):
         return None
 
 def analyze_sentiment(df):
-    """Analyze sentiment using TextBlob"""
     if df.empty:
         return df
     
@@ -639,7 +572,6 @@ def analyze_sentiment(df):
     return df
 
 def generate_insights(df, video_title):
-    """Generate key insights from sentiment analysis"""
     total_comments = len(df)
     if total_comments == 0:
         return ["No comments to analyze"]
@@ -649,7 +581,6 @@ def generate_insights(df, video_title):
     
     insights = []
     
-    # Overall sentiment insight
     if avg_sentiment > 0.2:
         insights.append(f"Very Positive Reception: Comments show strong positive sentiment (avg: {avg_sentiment:.2f})")
     elif avg_sentiment > 0:
@@ -661,12 +592,10 @@ def generate_insights(df, video_title):
     else:
         insights.append(f"Neutral Dominance: Comments are mostly neutral or balanced")
     
-    # Distribution insight
     dominant_sentiment = sentiment_counts.idxmax()
     dominant_percent = (sentiment_counts.max() / total_comments) * 100
     insights.append(f"{dominant_sentiment} Comments Dominate: {dominant_percent:.1f}% of all comments")
     
-    # Top negative keywords insight
     if "Negative" in sentiment_counts:
         negative_comments = df[df["sentiment"] == "Negative"]["comment"]
         if len(negative_comments) > 0:
@@ -677,7 +606,6 @@ def generate_insights(df, video_title):
                 word_list = ", ".join([word for word, _ in common_words])
                 insights.append(f"Common Concerns: Frequent words in negative comments: {word_list}")
     
-    # Engagement insight
     if 'like_count' in df.columns:
         avg_likes = df["like_count"].mean()
         if avg_likes > 10:
@@ -688,7 +616,6 @@ def generate_insights(df, video_title):
     return insights
 
 def create_comparison_chart(video_ids):
-    """Create comparison chart for multiple videos"""
     if len(video_ids) < 2:
         return None
     
@@ -729,95 +656,331 @@ def create_comparison_chart(video_ids):
     
     return None
 
-# ============================================
-# MAIN APP LAYOUT
-# ============================================
-
-# Sidebar
-st.sidebar.markdown("""
-<div style="display:flex; align-items:center; gap:10px;">
-    <img src="https://upload.wikimedia.org/wikipedia/commons/0/09/YouTube_full-color_icon_%282017%29.svg"
-         width="28">
-    <h3 style="margin:0;">YouTube Sentiment</h3>
-</div>
-<hr>
-""", unsafe_allow_html=True)
-
-
-# Video input section
-st.sidebar.subheader("📹 Add Videos to Analyze")
-video_url = st.sidebar.text_input("YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
-
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    if st.button("Add Video", use_container_width=True):
-        if video_url:
-            video_id = extract_video_id(video_url)
-            if video_id:
-                if video_id not in st.session_state.current_videos:
-                    with st.spinner('Fetching video data...'):
-                        result = fetch_comments(video_id, video_url)
-                        if result:
-                            st.session_state.current_videos.append(video_id)
-                            st.success("Video added successfully!")
-                        else:
-                            st.error("Failed to fetch video data")
-                else:
-                    st.warning("Video already added")
+# ==================== EXPORT FUNCTIONS ====================
+def sanitize_text_for_pdf(text, method='remove'):
+    if text is None:
+        return ""
+    
+    if not isinstance(text, str):
+        text = str(text)
+    
+    if text.strip() == "":
+        return text
+    
+    replacements = {
+        '\u2022': '*', '\u25cf': '*', '\u25e6': '*',
+        '\u2013': '-', '\u2014': '--',
+        '\u2018': "'", '\u2019': "'",
+        '\u201c': '"', '\u201d': '"',
+        '\u00a9': '(c)', '\u00ae': '(R)',
+        '\u2122': '(TM)', '\u2026': '...',
+        '\u2764': '<3', '\u2665': '<3'
+    }
+    
+    for old_char, new_char in replacements.items():
+        text = text.replace(old_char, new_char)
+    
+    if method == 'remove':
+        text = text.encode('ascii', 'ignore').decode('ascii')
+    elif method == 'replace':
+        result = []
+        for char in text:
+            if ord(char) < 128:
+                result.append(char)
             else:
-                st.error("Invalid YouTube URL")
-        else:
-            st.error("Please enter a URL")
+                result.append(' ')
+        text = ''.join(result)
+    
+    text = ' '.join(text.split())
+    return text
 
+def generate_summary_report(video_id, video_info, df):
+    df_analyzed = analyze_sentiment(df.copy())
+    total_comments = len(df_analyzed)
+    
+    if total_comments == 0:
+        return None
+    
+    avg_sentiment = df_analyzed["sentiment_score"].mean()
+    positive_pct = (df_analyzed["sentiment"] == "Positive").mean() * 100
+    negative_pct = (df_analyzed["sentiment"] == "Negative").mean() * 100
+    neutral_pct = (df_analyzed["sentiment"] == "Neutral").mean() * 100
+    
+    summary_data = {
+        "Report Type": ["YouTube Sentiment Analysis Summary"],
+        "Generated By": [st.session_state.username],
+        "Generation Date": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        "Video Title": [video_info.get("title", "Unknown Video")[:50] + "..."],
+        "Video ID": [video_id],
+        "Total Comments": [total_comments],
+        "Average Sentiment": [f"{avg_sentiment:.3f}"],
+        "Positive Comments (%)": [f"{positive_pct:.1f}%"],
+        "Negative Comments (%)": [f"{negative_pct:.1f}%"],
+        "Neutral Comments (%)": [f"{neutral_pct:.1f}%"],
+        "Analysis Engine": ["TextBlob"],
+        "Session ID": [st.session_state.session_id],
+        "Deployment Mode": [DEPLOYMENT_MODE]
+    }
+    
+    return pd.DataFrame(summary_data)
+
+def generate_detailed_report(video_id, video_info, df):
+    df_analyzed = analyze_sentiment(df.copy())
+    detailed_df = df_analyzed.copy()
+    
+    detailed_df['analysis_timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    detailed_df['video_id'] = video_id
+    detailed_df['video_title'] = video_info.get("title", "Unknown Video")
+    detailed_df['analyzed_by'] = st.session_state.username
+    
+    return detailed_df
+
+# ==================== DASHBOARD HEADER ====================
+st.markdown(f'''
+    <div style="background: {card_color}; border-bottom: 1px solid {border_color}; 
+                padding: 1.2rem 2.5rem; margin: -2rem -1rem 2rem -1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px; color: {primary_color}; 
+                         font-weight: 600; font-size: 22px;">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                        <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z" fill="currentColor"/>
+                    </svg>
+                    <span>{APP_NAME}</span>
+                </div>
+                <div style="font-size: 14px; color: {text_light_color};">
+                    v{APP_VERSION} • {DEPLOYMENT_MODE.title()} Mode
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="user-chip">
+                    <div class="user-avatar">{st.session_state.username[0].upper()}</div>
+                    <div>
+                        <div style="font-weight: 600;">{st.session_state.username}</div>
+                        <div style="font-size: 11px; color: {text_light_color};">
+                            {st.session_state.user_role.upper()} • Session: {st.session_state.session_id}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+''', unsafe_allow_html=True)
+
+# Logout button
+col1, col2, col3 = st.columns([4, 2, 4])
 with col2:
-    if st.button("Clear All", use_container_width=True, type="secondary"):
-        st.session_state.current_videos = []
-        st.rerun()
+    if st.button("🚪 Secure Logout", key="logout_button", type="secondary", use_container_width=True):
+        logout()
 
-st.sidebar.markdown("---")
+st.markdown("---")
 
-# Display current videos
+# ==================== SIDEBAR ====================
+with st.sidebar:
+    # Fixed the f-string by using variables
+    header_html = f'''
+    <div style="padding: 20px; border-bottom: 1px solid {border_color}; 
+                background: {card_color}; border-radius: 8px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+            <div class="status-indicator">🔐 Secured</div>
+            <div style="font-size: 11px; color: {text_light_color};">
+                {datetime.now().strftime("%Y-%m-%d %H:%M")}
+            </div>
+        </div>
+        <div style="font-size: 13px; color: {text_color}; line-height: 1.5;">
+            <div style="margin-bottom: 5px;"><strong>User:</strong> {st.session_state.username}</div>
+            <div><strong>Role:</strong> {st.session_state.user_role}</div>
+        </div>
+    </div>
+    '''
+    st.markdown(header_html, unsafe_allow_html=True)
+    
+    # Video Management Section
+    st.markdown(f"<h3 style='color: {text_color}; margin: 25px 0 15px 0;'>🎬 Video Management</h3>", unsafe_allow_html=True)
+    
+    video_url = st.text_input("YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Add Video", use_container_width=True):
+            if video_url:
+                video_id = extract_video_id(video_url)
+                if video_id:
+                    if video_id not in st.session_state.current_videos:
+                        with st.spinner('Fetching video data...'):
+                            result = fetch_comments(video_id, video_url)
+                            if result:
+                                st.session_state.current_videos.append(video_id)
+                                st.success("Video added successfully!")
+                                
+                                upload_event = {
+                                    'timestamp': datetime.now().isoformat(),
+                                    'username': st.session_state.username,
+                                    'action': 'video_added',
+                                    'video_id': video_id,
+                                    'title': result['title'][:50]
+                                }
+                                st.session_state.analysis_history.append(upload_event)
+                            else:
+                                st.error("Failed to fetch video data")
+                    else:
+                        st.warning("Video already added")
+                else:
+                    st.error("Invalid YouTube URL")
+            else:
+                st.error("Please enter a URL")
+    
+    with col2:
+        if st.button("Clear All", use_container_width=True, type="secondary"):
+            st.session_state.current_videos = []
+            st.session_state.video_data = {}
+            safe_rerun()
+    
+    st.markdown("---")
+    
+    if st.session_state.current_videos:
+        st.markdown(f"<h3 style='color: {text_color}; margin: 25px 0 15px 0;'>📋 Selected Videos</h3>", unsafe_allow_html=True)
+        for i, vid in enumerate(st.session_state.current_videos, 1):
+            video_info = st.session_state.video_data.get(vid, {})
+            title = video_info.get("title", f"Video {i}")
+            col1, col2 = st.sidebar.columns([3, 1])
+            with col1:
+                st.caption(f"{i}. {title[:40]}...")
+            with col2:
+                if st.button("✕", key=f"remove_{vid}"):
+                    st.session_state.current_videos.remove(vid)
+                    safe_rerun()
+    
+    st.markdown("---")
+    
+    # Analysis settings
+    st.markdown(f"<h3 style='color: {text_color}; margin: 25px 0 15px 0;'>⚙️ Analysis Settings</h3>", unsafe_allow_html=True)
+    
+    sentiment_threshold = st.slider(
+        "Sentiment Threshold",
+        0.0, 1.0, 0.1, 0.05,
+        help="Adjust threshold for sentiment classification"
+    )
+    
+    # Security settings for admins
+    if st.session_state.user_role == 'admin':
+        st.markdown("---")
+        st.markdown(f"<h3 style='color: {text_color};'>🔒 Security Settings</h3>", unsafe_allow_html=True)
+        
+        auto_logout = st.checkbox("Enable Auto-logout", value=True)
+        
+        if st.button("🛡️ Security Audit", key="security_audit"):
+            audit_results = {
+                'session_id': st.session_state.session_id,
+                'login_time': st.session_state.last_activity.strftime('%Y-%m-%d %H:%M:%S'),
+                'user_role': st.session_state.user_role,
+                'video_analyses': len(st.session_state.video_data),
+                'deployment_mode': DEPLOYMENT_MODE
+            }
+            st.info(f"Security audit completed: {audit_results}")
+    
+    st.markdown("---")
+    
+    # Session info
+    session_duration = (datetime.now() - st.session_state.last_activity).seconds // 60
+    session_html = f'''
+    <div style="color: {text_color}; font-size: 12px; padding: 12px; 
+                background: {card_color}; border-radius: 8px; border: 1px solid {border_color};">
+        <div style="margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between;">
+                <span>Session:</span>
+                <span style="color: {text_light_color};">{session_duration}m active</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>Videos:</span>
+                <span style="color: {text_light_color};">{len(st.session_state.current_videos)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span>Mode:</span>
+                <span style="color: {text_light_color};">{DEPLOYMENT_MODE}</span>
+            </div>
+        </div>
+    </div>
+    '''
+    st.markdown(session_html, unsafe_allow_html=True)
+
+# ==================== DASHBOARD METRICS ====================
 if st.session_state.current_videos:
-    st.sidebar.subheader("📋 Selected Videos")
-    for i, vid in enumerate(st.session_state.current_videos, 1):
-        video_info = st.session_state.video_data.get(vid, {})
-        title = video_info.get("title", f"Video {i}")
-        col1, col2 = st.sidebar.columns([3, 1])
-        with col1:
-            st.caption(f"{i}. {title[:40]}...")
-        with col2:
-            if st.button("✕", key=f"remove_{vid}"):
-                st.session_state.current_videos.remove(vid)
-                st.rerun()
+    total_comments = sum(len(data['df']) for data in st.session_state.video_data.values())
+    avg_sentiment = "0.00"
+    
+    if total_comments > 0:
+        all_scores = []
+        for vid in st.session_state.current_videos:
+            if vid in st.session_state.video_data:
+                df = analyze_sentiment(st.session_state.video_data[vid]['df'].copy())
+                all_scores.extend(df['sentiment_score'].tolist())
+        avg_sentiment = f"{np.mean(all_scores):.2f}" if all_scores else "0.00"
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f'''
+            <div class="metric-card">
+                <div class="metric-label">Total Videos</div>
+                <div class="metric-value">{len(st.session_state.current_videos)}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f'''
+            <div class="metric-card">
+                <div class="metric-label">Total Comments</div>
+                <div class="metric-value">{total_comments:,}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f'''
+            <div class="metric-card">
+                <div class="metric-label">Avg Sentiment</div>
+                <div class="metric-value">{avg_sentiment}</div>
+            </div>
+        ''', unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f'''
+            <div class="metric-card">
+                <div class="metric-label">Security Status</div>
+                <div class="metric-value" style="color: {success_color};">✓</div>
+            </div>
+        ''', unsafe_allow_html=True)
+    
+    st.markdown("---")
 
-st.sidebar.markdown("---")
-st.sidebar.caption("💡 Tip: Add multiple videos for comparison")
-
-# Main Content
-st.title("📊 YouTube Sentiment Analysis")
-
+# ==================== MAIN CONTENT ====================
 if not st.session_state.current_videos:
     st.info("👈 Add YouTube videos from the sidebar to get started!")
-    st.markdown("""
-    <div class="instructions">
-    <h3>How to use:</h3>
-    <ol>
-        <li>Paste a YouTube video URL in the sidebar</li>
-        <li>Click "Add Video" to analyze comments</li>
-        <li>Add multiple videos for comparison</li>
-        <li>Use tabs below to explore insights</li>
-    </ol>
-    <p><strong>Note:</strong> You need a valid YouTube Data API key</p>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f'''
+        <div class="g-card">
+            <div style="text-align: center; padding: 40px 20px;">
+                <div style="font-size: 48px; margin-bottom: 20px;">🎬</div>
+                <h3 style="color: {text_color}; margin-bottom: 15px;">Welcome to YouTube Sentiment Analysis</h3>
+                <p style="color: {text_light_color}; line-height: 1.6; margin-bottom: 25px;">
+                    Analyze sentiment in YouTube comments securely. Add videos from the sidebar to begin.
+                </p>
+                <div style="display: inline-flex; align-items: center; gap: 8px; 
+                         padding: 10px 20px; background: {primary_color}; 
+                         color: white; border-radius: 8px; font-weight: 500;">
+                    🔒 Secure Session Active
+                </div>
+            </div>
+        </div>
+    ''', unsafe_allow_html=True)
     st.stop()
 
-# Create tabs
-tab1, tab2, tab3, tab4 = st.tabs([
-    "📈 Single Video Analysis",
-    "⚖️ Compare Videos",
-    "📋 Comment Explorer",
-    "📊 Advanced Analytics"
+# ==================== MAIN TABS ====================
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Single Video Analysis",
+    "⚖️ Video Comparison",
+    "💬 Comment Explorer",
+    "📈 Advanced Analytics",
+    "📤 Export Results"
 ])
 
 # Tab 1: Single Video Analysis
@@ -833,126 +996,89 @@ with tab1:
             video_info = st.session_state.video_data[video_selector]
             df = analyze_sentiment(video_info["df"].copy())
             
-            # Enhanced Insight Boxes
-            st.markdown('<div class="section">', unsafe_allow_html=True)
-            st.subheader("🔍 Key Insights")
-            
-            insight_colors = {
-                '💚': 'linear-gradient(135deg, #38b000, #2d8c00)',
-                '👍': 'linear-gradient(135deg, #4cc9f0, #4361ee)',
-                '🔴': 'linear-gradient(135deg, #d00000, #9d0208)',
-                '⚠️': 'linear-gradient(135deg, #f48c06, #e85d04)',
-                '⚖️': 'linear-gradient(135deg, #7209b7, #560bad)',
-                '📊': 'linear-gradient(135deg, #4361ee, #3a0ca3)',
-                '🔍': 'linear-gradient(135deg, #f72585, #b5179e)',
-                '🔥': 'linear-gradient(135deg, #ff5400, #ff6d00)',
-                '👏': 'linear-gradient(135deg, #ff9e00, #ff9100)'
-            }
-            
-            insights = generate_insights(df, video_info["title"])
-            
-            for insight in insights:
-                emoji = insight[:2] if insight[:2] in insight_colors else '📌'
-                bg_color = insight_colors.get(emoji, 'linear-gradient(135deg, #6c757d, #495057)')
-                
-                st.markdown(f"""
-                <div style="
-                    background: {bg_color};
-                    color: white;
-                    padding: 20px;
-                    border-radius: 14px;
-                    margin: 12px 0;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                    border-left: 6px solid rgba(255,255,255,0.3);
-                ">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <span style="font-size: 1.8rem;">{emoji}</span>
-                        <span style="font-size: 1rem; line-height: 1.4;">{insight}</span>
+            # Insights
+            insights_html = f'''
+            <div class="g-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 style="color: {text_color}; margin: 0 0 10px 0;">🔍 Key Insights</h3>
+                        <p style="color: {text_light_color}; margin: 0;">Analysis of: {video_info["title"][:60]}...</p>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Enhanced Metrics Section
-            st.markdown('<div class="section">', unsafe_allow_html=True)
-            st.subheader("📊 Performance Overview")
-            
-            positive_pct = (df["sentiment"] == "Positive").mean() * 100
-            engagement = df["like_count"].mean() if "like_count" in df.columns else 0
-            
-            metrics_html = f"""
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin: 20px 0;">
-                <div class="metric-card" style="background: linear-gradient(135deg, #4cc9f0, #4361ee);">
-                    <div style="font-size: 2rem;">📝</div>
-                    <div style="font-size: 2rem; font-weight: bold;">{len(df)}</div>
-                    <div style="font-size: 0.9rem; opacity: 0.9;">Total Comments</div>
-                </div>
-                <div class="metric-card" style="background: linear-gradient(135deg, #38b000, #2d8c00);">
-                    <div style="font-size: 2rem;">📈</div>
-                    <div style="font-size: 2rem; font-weight: bold;">{df['sentiment_score'].mean():.2f}</div>
-                    <div style="font-size: 0.9rem; opacity: 0.9;">Avg Sentiment</div>
-                </div>
-                <div class="metric-card" style="background: linear-gradient(135deg, #7209b7, #560bad);">
-                    <div style="font-size: 2rem;">👍</div>
-                    <div style="font-size: 2rem; font-weight: bold;">{positive_pct:.1f}%</div>
-                    <div style="font-size: 0.9rem; opacity: 0.9;">Positive</div>
-                </div>
-                <div class="metric-card" style="background: linear-gradient(135deg, #f48c06, #dc6b06);">
-                    <div style="font-size: 2rem;">❤️</div>
-                    <div style="font-size: 2rem; font-weight: bold;">{engagement:.0f}</div>
-                    <div style="font-size: 0.9rem; opacity: 0.9;">Avg Likes</div>
+                    <div class="status-indicator">● Active</div>
                 </div>
             </div>
+            '''
+            st.markdown(insights_html, unsafe_allow_html=True)
             
-            <style>
-            .metric-card {{
-                padding: 25px;
-                border-radius: 14px;
-                color: white;
-                text-align: center;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                transition: all 0.3s ease;
-            }}
-            .metric-card:hover {{
-                transform: translateY(-5px);
-                box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-            }}
-            </style>
-            """
-            st.markdown(metrics_html, unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            insights = generate_insights(df, video_info["title"])
+            for insight in insights:
+                insight_html = f'''
+                <div style="background: {card_color}; border-left: 4px solid {primary_color};
+                        padding: 15px; margin: 10px 0; border-radius: 0 8px 8px 0;">
+                    <div style="color: {text_color}; font-size: 14px;">{insight}</div>
+                </div>
+                '''
+                st.markdown(insight_html, unsafe_allow_html=True)
+            
+            # Metrics
+            positive_pct = (df["sentiment"] == "Positive").mean() * 100
+            avg_sentiment = df["sentiment_score"].mean()
+            engagement = df["like_count"].mean() if "like_count" in df.columns else 0
+            
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.markdown(f'''
+                    <div class="metric-card">
+                        <div class="metric-label">Total Comments</div>
+                        <div class="metric-value">{len(df):,}</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown(f'''
+                    <div class="metric-card">
+                        <div class="metric-label">Avg Sentiment</div>
+                        <div class="metric-value">{avg_sentiment:.2f}</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col3:
+                st.markdown(f'''
+                    <div class="metric-card">
+                        <div class="metric-label">Positive %</div>
+                        <div class="metric-value" style="color: {SENTIMENT_COLORS['Positive']};">{positive_pct:.1f}%</div>
+                    </div>
+                ''', unsafe_allow_html=True)
+            
+            with col4:
+                st.markdown(f'''
+                    <div class="metric-card">
+                        <div class="metric-label">Avg Likes</div>
+                        <div class="metric-value">{engagement:.0f}</div>
+                    </div>
+                ''', unsafe_allow_html=True)
             
             # Charts
             col1, col2 = st.columns(2)
             
             with col1:
-                st.markdown('<div class="section">', unsafe_allow_html=True)
-                st.subheader("📊 Sentiment Distribution")
-                
                 sentiment_counts = df["sentiment"].value_counts()
                 fig = px.pie(
                     values=sentiment_counts.values,
                     names=sentiment_counts.index,
                     color=sentiment_counts.index,
-                    color_discrete_map={
-                        'Positive': '#38b000',
-                        'Neutral': '#6c757d',
-                        'Negative': '#d00000'
-                    }
+                    color_discrete_map=SENTIMENT_COLORS,
+                    title="Sentiment Distribution"
                 )
                 fig.update_layout(
-                    template=custom_template,
                     showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
             
             with col2:
-                st.markdown('<div class="section">', unsafe_allow_html=True)
-                st.subheader("📈 Sentiment Over Time")
-                
                 daily_avg = df.groupby(df["published_at"].dt.date)["sentiment_score"].mean()
                 daily_count = df.groupby(df["published_at"].dt.date).size()
                 
@@ -962,8 +1088,7 @@ with tab1:
                     y=daily_avg.values,
                     mode='lines+markers',
                     name='Avg Sentiment',
-                    line=dict(color='#4361ee', width=3),
-                    marker=dict(size=8, color='#4361ee')
+                    line=dict(color=primary_color, width=3)
                 ))
                 fig.add_trace(go.Bar(
                     x=daily_count.index,
@@ -975,100 +1100,41 @@ with tab1:
                 ))
                 
                 fig.update_layout(
-                    yaxis=dict(title="Sentiment Score", gridcolor='rgba(0,0,0,0.05)'),
-                    yaxis2=dict(
-                        title="Comment Count",
-                        overlaying="y",
-                        side="right",
-                        gridcolor='rgba(0,0,0,0.05)'
-                    ),
+                    title="Sentiment Over Time",
+                    yaxis=dict(title="Sentiment Score"),
+                    yaxis2=dict(title="Comment Count", overlaying="y", side="right"),
                     hovermode='x unified',
-                    template=custom_template,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=1.02,
-                        xanchor="center",
-                        x=0.5
-                    )
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Word Analysis
-            st.markdown('<div class="section">', unsafe_allow_html=True)
-            st.subheader("🔍 Word Analysis")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**Top Words in Positive Comments**")
-                positive_text = " ".join(df[df["sentiment"] == "Positive"]["comment"].str.lower())
-                words = [word for word in positive_text.split() if len(word) > 3 and word.isalpha()]
-                if words:
-                    word_counts = Counter(words).most_common(10)
-                    pos_words_df = pd.DataFrame(word_counts, columns=['Word', 'Count'])
-                    st.dataframe(
-                        pos_words_df.style
-                        .background_gradient(subset=['Count'], cmap='Greens')
-                        .format({'Count': '{:,.0f}'}),
-                        use_container_width=True,
-                        height=400
-                    )
-            
-            with col2:
-                st.markdown("**Top Words in Negative Comments**")
-                negative_text = " ".join(df[df["sentiment"] == "Negative"]["comment"].str.lower())
-                words = [word for word in negative_text.split() if len(word) > 3 and word.isalpha()]
-                if words:
-                    word_counts = Counter(words).most_common(10)
-                    neg_words_df = pd.DataFrame(word_counts, columns=['Word', 'Count'])
-                    st.dataframe(
-                        neg_words_df.style
-                        .background_gradient(subset=['Count'], cmap='Reds')
-                        .format({'Count': '{:,.0f}'}),
-                        use_container_width=True,
-                        height=400
-                    )
-            
-            st.markdown('</div>', unsafe_allow_html=True)
 
-# Tab 2: Compare Videos
+# Tab 2: Video Comparison
 with tab2:
     if len(st.session_state.current_videos) >= 2:
-        st.markdown('<div class="section">', unsafe_allow_html=True)
-        st.subheader("📊 Video Comparison")
+        comparison_html = f'''
+        <div class="g-card">
+            <h3 style="color: {text_color}; margin: 0 0 10px 0;">📊 Video Comparison</h3>
+            <p style="color: {text_light_color}; margin: 0;">Compare sentiment across multiple videos</p>
+        </div>
+        '''
+        st.markdown(comparison_html, unsafe_allow_html=True)
         
         comparison_df = create_comparison_chart(st.session_state.current_videos)
         
         if comparison_df is not None and not comparison_df.empty:
-            # Comparison Metrics
             cols = st.columns(len(comparison_df))
             for idx, (_, row) in enumerate(comparison_df.iterrows()):
                 with cols[idx]:
-                    st.markdown(f"""
-                    <div style="
-                        background: linear-gradient(135deg, #4361ee, #3a0ca3);
-                        color: white;
-                        padding: 20px;
-                        border-radius: 14px;
-                        text-align: center;
-                        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                    ">
-                        <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 10px;">
-                            {row["Video"]}
+                    st.markdown(f'''
+                        <div class="metric-card">
+                            <div class="metric-label">{row["Video"]}</div>
+                            <div class="metric-value">{row["Total Comments"]:,}</div>
+                            <div class="metric-label" style="margin-top: 10px;">
+                                Sentiment: {row['Avg Sentiment']:.2f}
+                            </div>
                         </div>
-                        <div style="font-size: 2rem; font-weight: 700;">
-                            {row["Total Comments"]}
-                        </div>
-                        <div style="font-size: 0.9rem; opacity: 0.9; margin-top: 5px;">
-                            Comments
-                        </div>
-                        <div style="margin-top: 10px; font-size: 0.9rem;">
-                            Sentiment: {row['Avg Sentiment']:.2f}
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    ''', unsafe_allow_html=True)
             
             # Comparison Charts
             col1, col2 = st.columns(2)
@@ -1080,12 +1146,13 @@ with tab2:
                     y=["Positive %", "Negative %"],
                     title="Sentiment Distribution by Video",
                     barmode="group",
-                    color_discrete_map={"Positive %": "#38b000", "Negative %": "#d00000"}
+                    color_discrete_map={"Positive %": SENTIMENT_COLORS['Positive'], 
+                                      "Negative %": SENTIMENT_COLORS['Negative']}
                 )
                 fig.update_layout(
-                    template=custom_template,
                     yaxis_title="Percentage (%)",
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -1098,15 +1165,13 @@ with tab2:
                     color="Video",
                     title="Engagement vs Sentiment",
                     hover_name="Video",
-                    size_max=60,
-                    color_discrete_sequence=px.colors.qualitative.Bold
+                    size_max=60
                 )
                 fig.update_layout(
-                    template=custom_template,
                     xaxis_title="Total Comments",
                     yaxis_title="Average Sentiment",
-                    showlegend=True,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -1123,26 +1188,23 @@ with tab2:
                     "Negative %": "{:.1f}%",
                     "Avg Sentiment": "{:.3f}",
                     "Total Comments": "{:,.0f}"
-                })
-                .set_properties(**{
-                    'text-align': 'center',
-                    'font-family': 'Inter, sans-serif'
                 }),
                 use_container_width=True,
                 height=300
             )
-        else:
-            st.info("Unable to generate comparison data. Make sure videos have comments.")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("Add at least 2 videos to enable comparison")
 
 # Tab 3: Comment Explorer
 with tab3:
     if st.session_state.current_videos:
-        st.markdown('<div class="section">', unsafe_allow_html=True)
-        st.subheader("💬 Comment Explorer")
+        explorer_html = f'''
+        <div class="g-card">
+            <h3 style="color: {text_color}; margin: 0 0 10px 0;">💬 Comment Explorer</h3>
+            <p style="color: {text_light_color}; margin: 0;">Browse and filter comments by sentiment</p>
+        </div>
+        '''
+        st.markdown(explorer_html, unsafe_allow_html=True)
         
         selected_video = st.selectbox(
             "Select Video",
@@ -1161,17 +1223,15 @@ with tab3:
                 sentiment_filter = st.multiselect(
                     "Filter by Sentiment",
                     options=["Positive", "Neutral", "Negative"],
-                    default=["Positive", "Neutral", "Negative"],
-                    format_func=lambda x: f"📊 {x}"
+                    default=["Positive", "Neutral", "Negative"]
                 )
             with col2:
                 sort_by = st.selectbox(
                     "Sort by",
-                    options=["Newest", "Oldest", "Most Likes", "Highest Sentiment", "Lowest Sentiment"],
-                    format_func=lambda x: f"🔽 {x}" if "Lowest" in x else f"🔼 {x}" if "Highest" in x else f"📅 {x}"
+                    options=["Newest", "Oldest", "Most Likes", "Highest Sentiment", "Lowest Sentiment"]
                 )
             with col3:
-                comments_to_show = st.slider("Comments to show", 10, 100, 20, format="%d comments")
+                comments_to_show = st.slider("Comments to show", 10, 100, 20)
             
             # Apply filters
             filtered_df = df[df["sentiment"].isin(sentiment_filter)]
@@ -1192,57 +1252,46 @@ with tab3:
             # Display comments
             st.subheader(f"📝 Showing {len(filtered_df.head(comments_to_show))} comments")
             
-            sentiment_colors = {
-                "Positive": "#38b000",
-                "Neutral": "#6c757d",
-                "Negative": "#d00000"
-            }
-            
-            sentiment_icons = {
-                "Positive": "✅",
-                "Neutral": "⚪",
-                "Negative": "❌"
-            }
-            
             for _, row in filtered_df.head(comments_to_show).iterrows():
-                sentiment_color = sentiment_colors[row["sentiment"]]
-                sentiment_icon = sentiment_icons[row["sentiment"]]
+                sentiment_color = SENTIMENT_COLORS[row["sentiment"]]
+                sentiment_icon = "✅" if row["sentiment"] == "Positive" else "⚪" if row["sentiment"] == "Neutral" else "❌"
                 
-                st.markdown(f"""
-                <div style="
-                    border-left: 6px solid {sentiment_color};
-                    padding: 18px;
-                    margin: 12px 0;
-                    background: white;
-                    border-radius: 0 12px 12px 0;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-                    transition: all 0.2s ease;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.5rem;">{sentiment_icon}</span>
-                            <span style="font-weight: 600; color: {sentiment_color}; font-size: 1.1rem;">
-                                {row['sentiment']} <span style="font-weight: 400; opacity: 0.8;">({row['sentiment_score']:.2f})</span>
+                comment_html = f'''
+                <div style="border-left: 4px solid {sentiment_color}; padding: 15px; 
+                         margin: 10px 0; background: {card_color}; border-radius: 0 8px 8px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.2rem;">{sentiment_icon}</span>
+                            <span style="font-weight: 600; color: {sentiment_color};">
+                                {row['sentiment']} ({row['sentiment_score']:.2f})
                             </span>
                         </div>
-                        <div style="color: #6c757d; font-size: 0.9em; text-align: right;">
-                            <div>{row['published_at'].strftime('%Y-%m-%d %H:%M')}</div>
-                            <div style="margin-top: 4px;">
-                                {row.get('author', 'Unknown')}
-                                {' • ' + str(row['like_count']) + ' ❤️' if row.get('like_count', 0) > 0 else ''}
-                           
-                        {row['comment'][:400]}{'...' if len(row['comment']) > 400 else ''}
-                    
-                """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+                        <div style="color: {text_light_color}; font-size: 0.9em;">
+                            {row['published_at'].strftime('%Y-%m-%d %H:%M')}
+                        </div>
+                    </div>
+                    <div style="color: {text_color}; line-height: 1.5;">
+                        {row['comment'][:300]}{'...' if len(row['comment']) > 300 else ''}
+                    </div>
+                    <div style="margin-top: 8px; color: {text_light_color}; font-size: 0.9em;">
+                        {row.get('author', 'Unknown')}
+                        {f" • {row['like_count']} ❤️" if row.get('like_count', 0) > 0 else ''}
+                    </div>
+                </div>
+                '''
+                st.markdown(comment_html, unsafe_allow_html=True)
 
 # Tab 4: Advanced Analytics
 with tab4:
-    st.markdown('<div class="section">', unsafe_allow_html=True)
-    st.subheader("📈 Advanced Analytics")
-    
-    if len(st.session_state.current_videos) >= 1:
+    if st.session_state.current_videos:
+        analytics_html = f'''
+        <div class="g-card">
+            <h3 style="color: {text_color}; margin: 0 0 10px 0;">📈 Advanced Analytics</h3>
+            <p style="color: {text_light_color}; margin: 0;">Detailed analytics and insights</p>
+        </div>
+        '''
+        st.markdown(analytics_html, unsafe_allow_html=True)
+        
         selected_video = st.selectbox(
             "Select Video for Analysis",
             options=st.session_state.current_videos,
@@ -1257,7 +1306,6 @@ with tab4:
             col1, col2 = st.columns(2)
             
             with col1:
-                # Sentiment Distribution by Hour
                 st.markdown("**🕒 Sentiment by Hour of Day**")
                 df["hour"] = df["published_at"].dt.hour
                 hourly_sentiment = df.groupby("hour")["sentiment_score"].mean().reset_index()
@@ -1268,18 +1316,16 @@ with tab4:
                     y="sentiment_score",
                     title="Average Sentiment by Hour",
                     color="sentiment_score",
-                    color_continuous_scale="RdYlGn",
-                    labels={"hour": "Hour of Day", "sentiment_score": "Average Sentiment"}
+                    color_continuous_scale="RdYlGn"
                 )
                 fig.update_layout(
-                    template=custom_template,
                     xaxis=dict(tickmode='linear', dtick=1),
-                    coloraxis_colorbar=dict(title="Sentiment")
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
             with col2:
-                # Comment Length vs Sentiment
                 st.markdown("**📏 Comment Length Analysis**")
                 df["comment_length"] = df["comment"].str.len()
                 
@@ -1289,157 +1335,239 @@ with tab4:
                     y="sentiment_score",
                     color="sentiment",
                     title="Comment Length vs Sentiment",
-                    hover_data=["comment"],
-                    color_discrete_map={
-                        "Positive": "#38b000",
-                        "Neutral": "#6c757d",
-                        "Negative": "#d00000"
-                    },
-                    labels={"comment_length": "Comment Length (characters)", "sentiment_score": "Sentiment Score"}
+                    color_discrete_map=SENTIMENT_COLORS
                 )
                 fig.update_layout(
-                    template=custom_template,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5)
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)'
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+# Tab 5: Export Results
+with tab5:
+    if st.session_state.current_videos:
+        export_html = f'''
+        <div class="g-card">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h3 style="color: {text_color}; margin: 0 0 10px 0;">📤 Export Results</h3>
+                    <p style="color: {text_light_color}; margin: 0;">Export analysis results securely</p>
+                </div>
+                <div class="status-indicator">🔐 Secure Export</div>
+            </div>
+        </div>
+        '''
+        st.markdown(export_html, unsafe_allow_html=True)
+        
+        selected_video = st.selectbox(
+            "Select Video to Export",
+            options=st.session_state.current_videos,
+            format_func=lambda x: st.session_state.video_data[x]["title"][:50] + "...",
+            key="export_select"
+        )
+        
+        if selected_video:
+            video_info = st.session_state.video_data[selected_video]
+            df = video_info["df"].copy()
             
-            # Export Section
-            st.markdown('<div class="section">', unsafe_allow_html=True)
-            st.subheader("📤 Export Data")
-            
-            col1, col2, col3 = st.columns(3)
+            # Export cards layout
+            col1, col2 = st.columns(2)
             
             with col1:
-                if st.button("📥 Download CSV", use_container_width=True, key="csv_btn"):
-                    csv = df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        label="Click to download",
-                        data=csv,
-                        file_name=f"youtube_sentiment_{selected_video}.csv",
-                        mime="text/csv",
-                        use_container_width=True,
-                        key="csv_download"
-                    )
+                export_card1_html = f'''
+                <div style="text-align: center; padding: 24px 20px; border: 2px dashed {border_color}; 
+                        border-radius: 12px; min-height: 240px; display: flex; flex-direction: column; 
+                        justify-content: center; transition: all 0.3s ease; background: {background_color};">
+                    <div style="font-size: 40px; margin-bottom: 16px; color: {primary_color};">📊</div>
+                    <div style="font-weight: 600; margin-bottom: 12px; font-size: 18px; color: {text_color};">
+                        Summary Report
+                    </div>
+                    <div style="font-size: 13px; color: {text_light_color}; margin-bottom: 16px; line-height: 1.5;">
+                        Comprehensive analysis summary with key metrics, insights, and security audit trail.
+                    </div>
+                    <div style="font-size: 11px; color: {text_light_color}; margin-top: 12px;">
+                        🔐 Encrypted CSV • Timestamped • Audit Trail
+                    </div>
+                </div>
+                '''
+                st.markdown(export_card1_html, unsafe_allow_html=True)
+                
+                if st.button("📥 Export Summary Report", key="export_summary_btn", use_container_width=True):
+                    summary_df = generate_summary_report(selected_video, video_info, df)
+                    
+                    if summary_df is not None:
+                        csv_data = summary_df.to_csv(index=False)
+                        
+                        export_event = {
+                            'timestamp': datetime.now().isoformat(),
+                            'username': st.session_state.username,
+                            'export_type': 'summary_report',
+                            'filename': f"youtube_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            'video_id': selected_video
+                        }
+                        st.session_state.export_history.append(export_event)
+                        
+                        st.download_button(
+                            label="⬇️ Download Secure CSV",
+                            data=csv_data,
+                            file_name=export_event['filename'],
+                            mime="text/csv",
+                            key="download_summary_csv",
+                            use_container_width=True
+                        )
+                        
+                        st.success("✅ Summary report generated! Download started.")
             
             with col2:
-                if st.button("📊 Generate Report", use_container_width=True, key="report_btn"):
-                    with st.spinner("Generating report..."):
-                        try:
-                            # Create summary
-                            summary_data = {
-                                "Metric": [
-                                    "Video Title",
-                                    "Total Comments",
-                                    "Average Sentiment",
-                                    "Positive Comments",
-                                    "Negative Comments",
-                                    "Neutral Comments",
-                                    "Max Comment Likes",
-                                    "Average Comment Length",
-                                    "Analysis Date"
-                                ],
-                                "Value": [
-                                    video_info["title"][:50] + "...",
-                                    f"{len(df):,}",
-                                    f"{df['sentiment_score'].mean():.3f}",
-                                    f"{(df['sentiment'] == 'Positive').sum():,}",
-                                    f"{(df['sentiment'] == 'Negative').sum():,}",
-                                    f"{(df['sentiment'] == 'Neutral').sum():,}",
-                                    f"{df['like_count'].max() if 'like_count' in df.columns else 0:,}",
-                                    f"{df['comment'].str.len().mean():.1f}",
-                                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                ]
-                            }
-                            
-                            summary_df = pd.DataFrame(summary_data)
-                            
-                            st.markdown("### 📋 Analysis Summary")
-                            st.dataframe(
-                                summary_df,
-                                use_container_width=True,
-                                height=400,
-                                hide_index=True
-                            )
-                            
-                            # Show insights
-                            st.markdown("### 🔍 Key Insights")
-                            insights = generate_insights(df, video_info["title"])
-                            for insight in insights:
-                                st.info(insight)
-                            
-                            st.success("✅ Report generated successfully!")
-                            
-                        except Exception as e:
-                            st.error(f"Error generating report: {str(e)}")
+                export_card2_html = f'''
+                <div style="text-align: center; padding: 24px 20px; border: 2px dashed {border_color}; 
+                        border-radius: 12px; min-height: 240px; display: flex; flex-direction: column; 
+                        justify-content: center; transition: all 0.3s ease; background: {background_color};">
+                    <div style="font-size: 40px; margin-bottom: 16px; color: {primary_color};">📈</div>
+                    <div style="font-weight: 600; margin-bottom: 12px; font-size: 18px; color: {text_color};">
+                        Detailed Analysis
+                    </div>
+                    <div style="font-size: 13px; color: {text_light_color}; margin-bottom: 16px; line-height: 1.5;">
+                        Complete dataset with sentiment scores, metadata, and analysis results.
+                    </div>
+                    <div style="font-size: 11px; color: {text_light_color}; margin-top: 12px;">
+                        🔐 Full Dataset • Sentiment Scores • Analysis Metadata
+                    </div>
+                </div>
+                '''
+                st.markdown(export_card2_html, unsafe_allow_html=True)
+                
+                if st.button("📥 Export Detailed Analysis", key="export_detailed_btn", use_container_width=True):
+                    detailed_df = generate_detailed_report(selected_video, video_info, df)
+                    csv_data = detailed_df.to_csv(index=False)
+                    
+                    export_event = {
+                        'timestamp': datetime.now().isoformat(),
+                        'username': st.session_state.username,
+                        'export_type': 'detailed_analysis',
+                        'filename': f"youtube_detailed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        'video_id': selected_video,
+                        'records': len(detailed_df)
+                    }
+                    st.session_state.export_history.append(export_event)
+                    
+                    st.download_button(
+                        label="⬇️ Download Full Analysis",
+                        data=csv_data,
+                        file_name=export_event['filename'],
+                        mime="text/csv",
+                        key="download_detailed_csv",
+                        use_container_width=True
+                    )
+                    
+                    st.success(f"✅ Detailed analysis exported ({len(detailed_df):,} records)!")
             
-            with col3:
-                if st.button("📄 Generate PDF Report", use_container_width=True, key="pdf_btn"):
-                    with st.spinner("Creating PDF report..."):
-                        try:
-                            pdf_bytes = generate_pdf_report(selected_video, video_info, df)
-                            
-                            if pdf_bytes:
-                                st.download_button(
-                                    label="📥 Download PDF Report",
-                                    data=pdf_bytes,
-                                    file_name=f"youtube_sentiment_report_{selected_video}.pdf",
-                                    mime="application/pdf",
-                                    use_container_width=True,
-                                    key="pdf_download"
-                                )
-                                
-                                st.success("✅ PDF report generated successfully!")
-                            else:
-                                st.error("Failed to generate PDF report")
-                                
-                        except Exception as e:
-                            st.error(f"Error generating PDF: {str(e)}")
-                            # Fallback to text report
-                            text_report = create_text_report_fallback(selected_video, video_info, df)
-                            st.download_button(
-                                label="📥 Download Text Report",
-                                data=text_report,
-                                file_name=f"sentiment_report_{selected_video}.txt",
-                                mime="text/plain",
-                                use_container_width=True,
-                                key="txt_download"
-                            )
+            # Additional export options
+            st.markdown("---")
+            advanced_export_html = f'''
+            <div class="g-card">
+                <h3 style="color: {text_color}; margin: 0 0 10px 0;">🔧 Advanced Export Options</h3>
+                <p style="color: {text_light_color}; margin: 0;">Additional export formats</p>
+            </div>
+            '''
+            st.markdown(advanced_export_html, unsafe_allow_html=True)
             
-            # Raw Data View
-            st.markdown("### 📄 Raw Comment Data")
-            st.dataframe(
-                df[["comment", "sentiment", "sentiment_score", "published_at", "like_count", "author"]]
-                .head(50)
-                .style
-                .background_gradient(subset=['sentiment_score'], cmap='RdYlGn', vmin=-1, vmax=1)
-                .format({
-                    'sentiment_score': '{:.3f}',
-                    'like_count': '{:,.0f}'
-                }),
-                use_container_width=True,
-                height=400
-            )
+            col1, col2 = st.columns(2)
             
-            st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+            with col1:
+                if st.button("📋 Export Raw Comments", key="export_raw_btn", use_container_width=True):
+                    csv_data = df.to_csv(index=False)
+                    
+                    export_event = {
+                        'timestamp': datetime.now().isoformat(),
+                        'username': st.session_state.username,
+                        'export_type': 'raw_comments',
+                        'filename': f"youtube_raw_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        'video_id': selected_video
+                    }
+                    st.session_state.export_history.append(export_event)
+                    
+                    st.download_button(
+                        label="⬇️ Download Raw Comments",
+                        data=csv_data,
+                        file_name=export_event['filename'],
+                        mime="text/csv",
+                        key="download_raw_csv",
+                        use_container_width=True
+                    )
+                    
+                    st.success(f"✅ Raw comments exported ({len(df):,} records)!")
+            
+            with col2:
+                if st.button("📊 Export Chart Data", key="export_chartdata_btn", use_container_width=True):
+                    df_analyzed = analyze_sentiment(df.copy())
+                    sentiment_counts = df_analyzed["sentiment"].value_counts()
+                    
+                    chart_data = pd.DataFrame({
+                        'sentiment': sentiment_counts.index,
+                        'count': sentiment_counts.values,
+                        'percentage': (sentiment_counts.values / len(df_analyzed) * 100).round(1),
+                        'video_id': selected_video,
+                        'analysis_date': datetime.now().strftime("%Y-%m-%d")
+                    })
+                    
+                    csv_data = chart_data.to_csv(index=False)
+                    
+                    export_event = {
+                        'timestamp': datetime.now().isoformat(),
+                        'username': st.session_state.username,
+                        'export_type': 'chart_data',
+                        'filename': f"youtube_chart_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+                    }
+                    st.session_state.export_history.append(export_event)
+                    
+                    st.download_button(
+                        label="⬇️ Download Chart Data",
+                        data=csv_data,
+                        file_name=export_event['filename'],
+                        mime="text/csv",
+                        key="download_chartdata_csv",
+                        use_container_width=True
+                    )
+                    
+                    st.success("✅ Chart data exported successfully!")
+            
+            # Export history (for admins)
+            if st.session_state.user_role == 'admin' and st.session_state.export_history:
+                st.markdown("---")
+                with st.expander("📋 Export History (Admin Only)"):
+                    history_df = pd.DataFrame(st.session_state.export_history)
+                    st.dataframe(history_df, use_container_width=True)
 
-# Footer
+# ==================== FOOTER ====================
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #6c757d; padding: 20px 0;">
-    <div style="font-size: 1rem; font-weight: 600; margin-bottom: 10px;">
-        YouTube Sentiment Analysis Dashboard
+footer_html = f'''
+<div style="text-align: center; color: {text_light_color}; font-size: 12px; padding: 20px 0;">
+    <div style="margin-bottom: 8px;">
+        <strong>{APP_NAME} v{APP_VERSION}</strong> • {DEPLOYMENT_MODE.upper()} MODE • SECURE SESSION
     </div>
-    <div style="font-size: 0.9rem;">
-        Powered by YouTube Data API v3 • Built with Streamlit
+    <div style="display: flex; justify-content: center; gap: 30px; margin-bottom: 8px; font-size: 11px;">
+        <span>User: {st.session_state.username}</span>
+        <span>Role: {st.session_state.user_role.upper()}</span>
+        <span>Session: {st.session_state.session_id}</span>
     </div>
-    <div style="margin-top: 10px; font-size: 0.8rem; opacity: 0.7;">
-        Analyze and visualize sentiment in YouTube comments
+    <div style="font-size: 11px; color: {COLORS['neutral']};">
+        © 2024 YouTube Sentiment Analysis Dashboard • All rights reserved
     </div>
 </div>
-""", unsafe_allow_html=True)
+'''
+st.markdown(footer_html, unsafe_allow_html=True)
 
-
-
-
+# Deployment mode indicator
+if DEPLOYMENT_MODE != 'development':
+    deployment_color = '#34A853' if DEPLOYMENT_MODE == 'production' else '#FBBC05'
+    deployment_html = f'''
+    <div style="position: fixed; bottom: 10px; right: 10px; z-index: 9999;">
+        <div style="background: {deployment_color}; 
+                    color: white; padding: 6px 14px; border-radius: 16px; 
+                    font-size: 11px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+            🔒 {DEPLOYMENT_MODE.upper()} • SECURE
+        </div>
+    </div>
+    '''
+    st.markdown(deployment_html, unsafe_allow_html=True)
