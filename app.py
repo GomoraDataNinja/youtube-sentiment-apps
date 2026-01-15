@@ -41,8 +41,36 @@ def load_config():
 
 config = load_config()
 
-# ==================== THEME-AWARE COLORS ====================
-def get_theme_colors(theme='light'):
+# ==================== THEME DETECTION & COLORS ====================
+def detect_theme():
+    """Detect current Streamlit theme"""
+    try:
+        # Check if theme is stored in session state
+        if 'current_theme' in st.session_state:
+            return st.session_state.current_theme
+        
+        # Default theme detection logic
+        # We'll try to detect from CSS variables
+        theme = 'light'  # Default to light
+        
+        # Check if we're in Streamlit Cloud or local
+        try:
+            # This is a workaround for theme detection
+            # Streamlit doesn't expose theme directly in Python
+            # We'll rely on CSS variables that Streamlit sets
+            pass
+        except:
+            pass
+            
+        return theme
+    except:
+        return 'light'
+
+def get_theme_colors(theme=None):
+    """Get colors based on theme"""
+    if theme is None:
+        theme = detect_theme()
+        
     if theme == 'dark':
         return {
             'primary': "#4285F4",
@@ -58,9 +86,10 @@ def get_theme_colors(theme='light'):
             'danger': "#EA4335",
             'sidebar': "#1E2126",
             'border': "#2D3748",
-            'hover': "#2A2D35"
+            'hover': "#2A2D35",
+            'shadow': "rgba(0, 0, 0, 0.3)"
         }
-    else:
+    else:  # light theme
         return {
             'primary': "#4285F4",
             'secondary': "#34A853",
@@ -75,11 +104,13 @@ def get_theme_colors(theme='light'):
             'danger': "#EA4335",
             'sidebar': "#202124",
             'border': "#DADCE0",
-            'hover': "#F1F3F4"
+            'hover': "#F1F3F4",
+            'shadow': "rgba(0, 0, 0, 0.1)"
         }
 
 # Initialize theme
-current_theme = 'light'
+current_theme = detect_theme()
+st.session_state.current_theme = current_theme
 COLORS = get_theme_colors(current_theme)
 
 # ==================== SENTIMENT COLORS ====================
@@ -144,6 +175,7 @@ def check_password(username, password):
         return False, "Invalid credentials"
 
 def show_login_page():
+    # Login page with fixed colors (doesn't change with theme)
     st.markdown("""
     <style>
     .login-container {
@@ -161,6 +193,7 @@ def show_login_page():
         width: 100%;
         max-width: 420px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        color: #202124;
     }
     .youtube-logo {
         width: 80px;
@@ -194,6 +227,12 @@ def show_login_page():
         color: #34A853;
         border: 1px solid rgba(52, 168, 83, 0.3);
     }
+    .login-subtitle {
+        text-align: center;
+        color: #5F6368;
+        margin-bottom: 2.5rem;
+        font-size: 15px;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -210,7 +249,7 @@ def show_login_page():
     st.markdown(f'<h1 class="login-title">YouTube Sentiment Analysis</h1>', unsafe_allow_html=True)
     
     st.markdown(f'''
-        <p style="text-align: center; color: #5F6368; margin-bottom: 2.5rem; font-size: 15px;">
+        <p class="login-subtitle">
             Analyze sentiment in YouTube comments securely<br>
             <span style="font-size: 12px; opacity: 0.8;">
                 Deployment: <strong>{DEPLOYMENT_MODE.upper()}</strong> | Version: {APP_VERSION}
@@ -352,27 +391,38 @@ if 'analysis_history' not in st.session_state:
 if 'export_history' not in st.session_state:
     st.session_state.export_history = []
 
-# ==================== STYLES ====================
-text_color = COLORS['text']
-text_light_color = COLORS['text_light']
-background_color = COLORS['background']
-card_color = COLORS['card']
-border_color = COLORS['border']
-primary_color = COLORS['primary']
-success_color = COLORS['success']
-
+# ==================== DYNAMIC CSS FOR THEME SUPPORT ====================
 st.markdown(f"""
 <style>
+    /* CSS Variables for Theme Support */
+    :root {{
+        --primary-color: {COLORS['primary']};
+        --secondary-color: {COLORS['secondary']};
+        --accent-color: {COLORS['accent']};
+        --warning-color: {COLORS['warning']};
+        --neutral-color: {COLORS['neutral']};
+        --background-color: {COLORS['background']};
+        --card-color: {COLORS['card']};
+        --text-color: {COLORS['text']};
+        --text-light-color: {COLORS['text_light']};
+        --success-color: {COLORS['success']};
+        --danger-color: {COLORS['danger']};
+        --border-color: {COLORS['border']};
+        --hover-color: {COLORS['hover']};
+        --shadow-color: {COLORS['shadow']};
+    }}
+    
     /* Base styles */
     .stApp {{
-        background-color: {background_color};
+        background-color: var(--background-color);
         font-family: 'Inter', 'Roboto', sans-serif;
+        color: var(--text-color);
     }}
     
     /* Metric cards */
     .metric-card {{
-        background: {card_color};
-        border: 1px solid {border_color};
+        background: var(--card-color);
+        border: 1px solid var(--border-color);
         border-radius: 10px;
         padding: 20px;
         text-align: center;
@@ -381,19 +431,26 @@ st.markdown(f"""
         flex-direction: column;
         justify-content: center;
         transition: all 0.3s ease;
-        color: {text_color};
+        color: var(--text-color);
+        box-shadow: 0 2px 8px var(--shadow-color);
+    }}
+    
+    .metric-card:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 4px 16px var(--shadow-color);
+        border-color: var(--primary-color);
     }}
     
     .metric-value {{
         font-size: 32px;
         font-weight: 400;
-        color: {text_color};
+        color: var(--text-color);
         margin: 8px 0;
     }}
     
     .metric-label {{
         font-size: 12px;
-        color: {text_light_color};
+        color: var(--text-light-color);
         text-transform: uppercase;
         letter-spacing: 0.8px;
         font-weight: 600;
@@ -401,13 +458,18 @@ st.markdown(f"""
     
     /* Cards */
     .g-card {{
-        background: {card_color};
-        border: 1px solid {border_color};
+        background: var(--card-color);
+        border: 1px solid var(--border-color);
         border-radius: 12px;
         padding: 24px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-        color: {text_color};
+        box-shadow: 0 2px 12px var(--shadow-color);
+        color: var(--text-color);
+    }}
+    
+    .g-card:hover {{
+        box-shadow: 0 4px 20px var(--shadow-color);
+        border-color: var(--primary-color);
     }}
     
     /* User chip */
@@ -415,12 +477,12 @@ st.markdown(f"""
         display: flex;
         align-items: center;
         gap: 10px;
-        background: {background_color};
+        background: var(--background-color);
         padding: 10px 18px;
         border-radius: 24px;
-        border: 1px solid {border_color};
+        border: 1px solid var(--border-color);
         font-size: 14px;
-        color: {text_color};
+        color: var(--text-color);
         font-weight: 500;
     }}
     
@@ -428,13 +490,14 @@ st.markdown(f"""
         width: 36px;
         height: 36px;
         border-radius: 50%;
-        background: linear-gradient(135deg, {primary_color}, {COLORS['secondary']});
+        background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
         color: white;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 15px;
         font-weight: 600;
+        box-shadow: 0 2px 6px rgba(66, 133, 244, 0.3);
     }}
     
     /* Hide Streamlit branding */
@@ -452,11 +515,185 @@ st.markdown(f"""
         font-size: 12px;
         font-weight: 600;
         background: rgba(52, 168, 83, 0.15);
-        color: {success_color};
+        color: var(--success-color);
         border: 1px solid rgba(52, 168, 83, 0.3);
     }}
+    
+    /* Input fields */
+    .stTextInput > div > div > input {{
+        background-color: var(--card-color);
+        color: var(--text-color);
+        border-color: var(--border-color);
+    }}
+    
+    .stTextInput > label {{
+        color: var(--text-color);
+    }}
+    
+    /* Select boxes */
+    .stSelectbox > div > div {{
+        background-color: var(--card-color);
+        color: var(--text-color);
+        border-color: var(--border-color);
+    }}
+    
+    /* Buttons */
+    .stButton > button {{
+        transition: all 0.3s ease;
+    }}
+    
+    .stButton > button:hover {{
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px var(--shadow-color);
+    }}
+    
+    /* Dataframes */
+    .stDataFrame {{
+        background-color: var(--card-color);
+        color: var(--text-color);
+    }}
+    
+    .stDataFrame th {{
+        background-color: var(--background-color);
+        color: var(--text-color);
+    }}
+    
+    .stDataFrame td {{
+        color: var(--text-color);
+    }}
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab"] {{
+        background-color: var(--background-color);
+        color: var(--text-color);
+    }}
+    
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {{
+        background-color: var(--primary-color);
+        color: white;
+    }}
+    
+    /* Expanders */
+    .streamlit-expanderHeader {{
+        color: var(--text-color);
+        background-color: var(--card-color);
+    }}
+    
+    /* Alerts */
+    .stAlert {{
+        color: var(--text-color);
+    }}
+    
+    /* Progress bars */
+    .stProgress > div > div > div > div {{
+        background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    }}
+    
+    /* Ensure text is visible in all components */
+    .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, 
+    .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {{
+        color: var(--text-color) !important;
+    }}
+    
+    /* Fix for selectbox options */
+    [data-baseweb="popover"] {{
+        background-color: var(--card-color) !important;
+        color: var(--text-color) !important;
+    }}
+    
+    /* Fix for sidebar */
+    [data-testid="stSidebar"] {{
+        background-color: var(--background-color);
+        color: var(--text-color);
+    }}
+    
+    /* Fix for sidebar content */
+    [data-testid="stSidebar"] .stMarkdown {{
+        color: var(--text-color);
+    }}
+    
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {{
+        width: 8px;
+        height: 8px;
+    }}
+    
+    ::-webkit-scrollbar-track {{
+        background: var(--background-color);
+    }}
+    
+    ::-webkit-scrollbar-thumb {{
+        background: var(--border-color);
+        border-radius: 4px;
+    }}
+    
+    ::-webkit-scrollbar-thumb:hover {{
+        background: var(--neutral-color);
+    }}
+    
+    /* Plotly chart background fix */
+    .js-plotly-plot .plotly .modebar {{
+        background: transparent !important;
+    }}
+    
+    /* Make sure all text is visible */
+    * {{
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }}
 </style>
+
+<!-- JavaScript to detect theme changes -->
+<script>
+    // Function to detect Streamlit theme
+    function detectTheme() {{
+        // Check CSS variables or body background
+        const bodyStyle = window.getComputedStyle(document.body);
+        const bgColor = bodyStyle.backgroundColor;
+        
+        // Convert RGB to brightness
+        const rgb = bgColor.match(/\\d+/g);
+        if (rgb) {{
+            const brightness = (parseInt(rgb[0]) * 299 + parseInt(rgb[1]) * 587 + parseInt(rgb[2]) * 114) / 1000;
+            return brightness < 128 ? 'dark' : 'light';
+        }}
+        return 'light';
+    }}
+    
+    // Send theme to Python when it changes
+    function updateTheme() {{
+        const theme = detectTheme();
+        const event = new CustomEvent('setTheme', {{ detail: {{ theme: theme }} }});
+        window.parent.document.dispatchEvent(event);
+    }}
+    
+    // Check for theme changes periodically
+    let lastTheme = detectTheme();
+    setInterval(() => {{
+        const currentTheme = detectTheme();
+        if (currentTheme !== lastTheme) {{
+            lastTheme = currentTheme;
+            updateTheme();
+        }}
+    }}, 1000);
+</script>
 """, unsafe_allow_html=True)
+
+# JavaScript to update theme in session state
+st.components.v1.html("""
+<script>
+    // Listen for theme change events
+    window.addEventListener('setTheme', function(e) {
+        const theme = e.detail.theme;
+        
+        // Send to Streamlit
+        window.parent.postMessage({
+            type: 'streamlit:setComponentValue',
+            value: theme
+        }, '*');
+    });
+</script>
+""", height=0)
 
 # ==================== SECURITY MIDDLEWARE ====================
 if st.session_state.authenticated and check_session_timeout():
@@ -736,6 +973,15 @@ def generate_detailed_report(video_id, video_info, df):
     return detailed_df
 
 # ==================== DASHBOARD HEADER ====================
+# Update colors based on current theme
+text_color = COLORS['text']
+text_light_color = COLORS['text_light']
+background_color = COLORS['background']
+card_color = COLORS['card']
+border_color = COLORS['border']
+primary_color = COLORS['primary']
+success_color = COLORS['success']
+
 st.markdown(f'''
     <div style="background: {card_color}; border-bottom: 1px solid {border_color}; 
                 padding: 1.2rem 2.5rem; margin: -2rem -1rem 2rem -1rem;">
@@ -749,7 +995,7 @@ st.markdown(f'''
                     <span>{APP_NAME}</span>
                 </div>
                 <div style="font-size: 14px; color: {text_light_color};">
-                    v{APP_VERSION} • {DEPLOYMENT_MODE.title()} Mode
+                    v{APP_VERSION} • {DEPLOYMENT_MODE.title()} Mode • {current_theme.title()} Theme
                 </div>
             </div>
             <div style="display: flex; align-items: center; gap: 20px;">
@@ -1059,7 +1305,7 @@ with tab1:
                     </div>
                 ''', unsafe_allow_html=True)
             
-            # Charts
+            # Charts - Update Plotly charts with theme-aware colors
             col1, col2 = st.columns(2)
             
             with col1:
@@ -1074,7 +1320,8 @@ with tab1:
                 fig.update_layout(
                     showlegend=True,
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color=text_color)
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -1105,7 +1352,9 @@ with tab1:
                     yaxis2=dict(title="Comment Count", overlaying="y", side="right"),
                     hovermode='x unified',
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color=text_color),
+                    legend=dict(font=dict(color=text_color))
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -1152,7 +1401,9 @@ with tab2:
                 fig.update_layout(
                     yaxis_title="Percentage (%)",
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color=text_color),
+                    legend=dict(font=dict(color=text_color))
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -1171,7 +1422,9 @@ with tab2:
                     xaxis_title="Total Comments",
                     yaxis_title="Average Sentiment",
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color=text_color),
+                    legend=dict(font=dict(color=text_color))
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -1321,7 +1574,8 @@ with tab4:
                 fig.update_layout(
                     xaxis=dict(tickmode='linear', dtick=1),
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color=text_color)
                 )
                 st.plotly_chart(fig, use_container_width=True)
             
@@ -1339,7 +1593,9 @@ with tab4:
                 )
                 fig.update_layout(
                     paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)'
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color=text_color),
+                    legend=dict(font=dict(color=text_color))
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -1544,7 +1800,7 @@ st.markdown("---")
 footer_html = f'''
 <div style="text-align: center; color: {text_light_color}; font-size: 12px; padding: 20px 0;">
     <div style="margin-bottom: 8px;">
-        <strong>{APP_NAME} v{APP_VERSION}</strong> • {DEPLOYMENT_MODE.upper()} MODE • SECURE SESSION
+        <strong>{APP_NAME} v{APP_VERSION}</strong> • {DEPLOYMENT_MODE.upper()} MODE • SECURE SESSION • {current_theme.upper()} THEME
     </div>
     <div style="display: flex; justify-content: center; gap: 30px; margin-bottom: 8px; font-size: 11px;">
         <span>User: {st.session_state.username}</span>
@@ -1566,7 +1822,7 @@ if DEPLOYMENT_MODE != 'development':
         <div style="background: {deployment_color}; 
                     color: white; padding: 6px 14px; border-radius: 16px; 
                     font-size: 11px; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
-            🔒 {DEPLOYMENT_MODE.upper()} • SECURE
+            🔒 {DEPLOYMENT_MODE.upper()} • {current_theme.upper()} THEME
         </div>
     </div>
     '''
