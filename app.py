@@ -14,10 +14,11 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-APP_VERSION = "2.2.0"
+APP_VERSION = "2.2.1"
 APP_NAME = "YouTube Sentiment Analysis"
 DEPLOYMENT_MODE = os.environ.get("DEPLOYMENT_MODE", "production")
 SESSION_TIMEOUT_MINUTES = 60
+MAX_COMMENTS_PER_VIDEO = 500
 
 st.set_page_config(
     page_title=f"{APP_NAME} v{APP_VERSION}",
@@ -67,7 +68,15 @@ SENTIMENT_COLORS = {
     "Negative": THEME["bad"],
 }
 
-def apply_style():
+def apply_style(mode="app"):
+    login_mode = (mode == "login")
+    block_display = "flex" if login_mode else "block"
+    block_justify = "center" if login_mode else "initial"
+    block_align = "center" if login_mode else "initial"
+    block_min_h = "100vh" if login_mode else "auto"
+    block_pt = "0rem" if login_mode else "1.6rem"
+    block_pb = "0rem" if login_mode else "2.2rem"
+
     st.markdown(
         f"""
         <style>
@@ -81,21 +90,47 @@ def apply_style():
             --border2: {THEME['border2']};
             --accent: {THEME['accent']};
             --accent2: {THEME['accent2']};
+            --good: {THEME['good']};
+            --bad: {THEME['bad']};
+            --neutral: {THEME['neutral']};
         }}
 
         .stApp {{
             background: var(--bg);
         }}
 
-        .block-container {{
-            padding-top: 1.2rem;
-            padding-bottom: 2rem;
-            max-width: 1080px;
+        /* Lock container spacing so deploy renders the same */
+        [data-testid="stAppViewContainer"] {{
+            background: var(--bg) !important;
         }}
 
-        * {{
+        .block-container {{
+            max-width: 1080px !important;
+            padding-top: {block_pt} !important;
+            padding-bottom: {block_pb} !important;
+
+            display: {block_display} !important;
+            justify-content: {block_justify} !important;
+            align-items: {block_align} !important;
+            min-height: {block_min_h} !important;
+        }}
+
+        html, body, [class*="css"] {{
             color: var(--text) !important;
             font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif !important;
+        }}
+
+        h1, h2, h3, h4, h5, h6,
+        p, span, label, small, li,
+        div, section, header, footer,
+        .stMarkdown, .stCaption, .stText, .stAlert,
+        [data-testid="stMarkdownContainer"] * {{
+            color: var(--text) !important;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif !important;
+        }}
+
+        .muted, .stCaption {{
+            color: var(--muted) !important;
         }}
 
         #MainMenu {{visibility: hidden;}}
@@ -103,8 +138,11 @@ def apply_style():
         .stDeployButton {{display: none;}}
 
         section[data-testid="stSidebar"] {{
-            background: #ffffff;
-            border-right: 1px solid var(--border);
+            background: #ffffff !important;
+            border-right: 1px solid var(--border) !important;
+        }}
+        section[data-testid="stSidebar"] * {{
+            color: var(--text) !important;
         }}
 
         .card {{
@@ -186,16 +224,14 @@ def apply_style():
             margin-top: 6px;
         }}
 
-        .muted {{
-            color: var(--muted) !important;
-        }}
-
+        /* Buttons */
         div.stButton > button {{
             background: var(--accent) !important;
             border: 1px solid var(--accent) !important;
             border-radius: 14px !important;
             padding: 0.7rem 1rem !important;
             font-weight: 750 !important;
+            color: #ffffff !important;
         }}
 
         div.stButton > button:hover {{
@@ -203,18 +239,22 @@ def apply_style():
             border: 1px solid var(--accent2) !important;
         }}
 
+        /* Inputs */
         .stTextInput > div > div > input {{
             background-color: #ffffff !important;
             border: 1px solid var(--border2) !important;
             border-radius: 14px !important;
+            color: var(--text) !important;
         }}
 
         .stSelectbox > div > div {{
             background-color: #ffffff !important;
             border: 1px solid var(--border2) !important;
             border-radius: 14px !important;
+            color: var(--text) !important;
         }}
 
+        /* Tabs */
         .stTabs [data-baseweb="tab"] {{
             background: #ffffff !important;
             border: 1px solid var(--border) !important;
@@ -229,18 +269,20 @@ def apply_style():
             border: 1px solid rgba(215,30,40,0.35) !important;
         }}
 
+        /* Dataframe */
         [data-testid="stDataFrame"] {{
             background: #ffffff;
             border: 1px solid var(--border);
             border-radius: 16px;
             overflow: hidden;
         }}
+        [data-testid="stDataFrame"] * {{
+            color: var(--text) !important;
+        }}
         </style>
         """,
         unsafe_allow_html=True,
     )
-
-apply_style()
 
 def touch():
     st.session_state.last_activity = datetime.now()
@@ -252,10 +294,8 @@ def is_timed_out():
     return (datetime.now() - last).total_seconds() > SESSION_TIMEOUT_MINUTES * 60
 
 def logout():
-    keep = []
     for k in list(st.session_state.keys()):
-        if k not in keep:
-            del st.session_state[k]
+        del st.session_state[k]
     safe_rerun()
 
 if "authenticated" not in st.session_state:
@@ -270,11 +310,12 @@ if "last_activity" not in st.session_state:
     st.session_state.last_activity = datetime.now()
 
 def login_screen():
-    c1, c2, c3 = st.columns([1, 1.25, 1])
-    with c2:
-        st.markdown(
-            f"""
-            <div class="card" style="margin-top: 11vh;">
+    apply_style(mode="login")
+
+    st.markdown(
+        f"""
+        <div style="width: 440px; max-width: 92vw;">
+            <div class="card">
                 <div class="title">{APP_NAME}</div>
                 <div class="subtitle">
                     Secure. Fast. Easy.<br>
@@ -283,21 +324,23 @@ def login_screen():
                 <div style="height: 14px;"></div>
                 <div class="chip"><span class="chip-dot"></span> Version {APP_VERSION} • {DEPLOYMENT_MODE.title()}</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <div style="height: 12px;"></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        with st.form("login_form", clear_on_submit=True):
-            pw = st.text_input("Password", type="password", placeholder="Organisation password")
-            ok = st.form_submit_button("Sign in", use_container_width=True)
+    with st.form("login_form", clear_on_submit=True):
+        pw = st.text_input("Password", type="password", placeholder="Organisation password")
+        ok = st.form_submit_button("Sign in", use_container_width=True)
 
-        if ok:
-            if pw == ORG_PASSWORD:
-                st.session_state.authenticated = True
-                touch()
-                safe_rerun()
-            else:
-                st.error("Wrong password.")
+    if ok:
+        if pw == ORG_PASSWORD:
+            st.session_state.authenticated = True
+            touch()
+            safe_rerun()
+        else:
+            st.error("Wrong password.")
 
 if st.session_state.authenticated and is_timed_out():
     st.session_state.authenticated = False
@@ -309,13 +352,14 @@ if not st.session_state.authenticated:
     login_screen()
     st.stop()
 
+apply_style(mode="app")
 touch()
 
 def extract_video_id(url):
     patterns = [
-        r"(?:v=|\/)([0-9A-Za-z_-]{11})",
-        r"youtu\.be\/([0-9A-Za-z_-]{11})",
-        r"embed\/([0-9A-Za-z_-]{11})",
+        r"(?:v=|\/)([0-9A-Za-z_-]{{11}})",
+        r"youtu\.be\/([0-9A-Za-z_-]{{11}})",
+        r"embed\/([0-9A-Za-z_-]{{11}})",
     ]
     for pattern in patterns:
         m = re.search(pattern, url)
@@ -335,7 +379,7 @@ def youtube_client():
 
     return build("youtube", "v3", developerKey=api_key)
 
-def get_video_comments(youtube, video_id, max_comments=500):
+def get_video_comments(youtube, video_id, max_comments=MAX_COMMENTS_PER_VIDEO):
     all_comments = []
     next_page_token = None
 
@@ -388,7 +432,7 @@ def fetch_video(video_id, video_url):
             return None
 
         info = vr["items"][0]
-        comments = get_video_comments(yt, video_id, max_comments=500)
+        comments = get_video_comments(yt, video_id, max_comments=MAX_COMMENTS_PER_VIDEO)
 
         if not comments:
             st.error("No comments returned. Comments may be disabled for this video.")
@@ -588,7 +632,7 @@ if st.session_state.current_videos:
                         del st.session_state.video_data[vid]
                     safe_rerun()
 
-cbtn1, cbtn2 = st.columns([1, 5])
+cbtn1, _ = st.columns([1, 5])
 with cbtn1:
     if st.session_state.current_videos:
         if st.button("Clear all", use_container_width=True):
@@ -631,11 +675,20 @@ avg_sent = float(np.mean(scores)) if scores else 0.0
 
 m1, m2, m3 = st.columns(3)
 with m1:
-    st.markdown(f"<div class='metric'><div class='metric-k'>Videos</div><div class='metric-v'>{total_videos}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='metric'><div class='metric-k'>Videos</div><div class='metric-v'>{total_videos}</div></div>",
+        unsafe_allow_html=True,
+    )
 with m2:
-    st.markdown(f"<div class='metric'><div class='metric-k'>Comments</div><div class='metric-v'>{total_comments:,}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='metric'><div class='metric-k'>Comments</div><div class='metric-v'>{total_comments:,}</div></div>",
+        unsafe_allow_html=True,
+    )
 with m3:
-    st.markdown(f"<div class='metric'><div class='metric-k'>Avg sentiment</div><div class='metric-v'>{avg_sent:.2f}</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='metric'><div class='metric-k'>Avg sentiment</div><div class='metric-v'>{avg_sent:.2f}</div></div>",
+        unsafe_allow_html=True,
+    )
 
 st.markdown("")
 
@@ -690,8 +743,7 @@ with tabs[0]:
 
         recent = df.sort_values("published_at", ascending=False).head(8)
         for _, row in recent.iterrows():
-            txt = str(row.get("comment", ""))
-            txt = txt.strip()
+            txt = str(row.get("comment", "")).strip()
             if len(txt) > 180:
                 txt = txt[:180] + "..."
             when = row.get("published_at")
@@ -700,6 +752,9 @@ with tabs[0]:
                 when_txt = pd.to_datetime(when).strftime("%Y-%m-%d %H:%M")
 
             badge = sentiment_badge(row["sentiment"])
+            likes = int(row.get("like_count", 0) or 0)
+            like_txt = f" • {likes} likes" if likes > 0 else ""
+
             st.markdown(
                 f"""
                 <div class="card-soft" style="margin-top: 10px;">
@@ -709,9 +764,9 @@ with tabs[0]:
                     </div>
                     <div style="margin-top: 10px; font-size: 13px; line-height:1.55;">{txt}</div>
                     <div class="muted" style="margin-top: 8px; font-size:12px;">
-                        {row.get('author','Unknown')}
-                        {" • " + str(int(row.get('like_count', 0))) + " likes" if int(row.get('like_count', 0)) > 0 else "  "}
-                   
+                        {row.get('author','Unknown')}{like_txt}
+                    </div>
+                </div>
                 """,
                 unsafe_allow_html=True,
             )
@@ -841,46 +896,48 @@ with tabs[3]:
         st.info("No comments to export.")
         st.stop()
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("Download summary CSV", use_container_width=True):
-            counts = df["sentiment"].value_counts()
-            summary = pd.DataFrame(
-                {
-                    "Video Title": [data["title"]],
-                    "Video ID": [vid],
-                    "Total Comments": [len(df)],
-                    "Avg Sentiment": [df["sentiment_score"].mean()],
-                    "Positive %": [(df["sentiment"] == "Positive").mean() * 100],
-                    "Neutral %": [(df["sentiment"] == "Neutral").mean() * 100],
-                    "Negative %": [(df["sentiment"] == "Negative").mean() * 100],
-                    "Positive Count": [int(counts.get("Positive", 0))],
-                    "Neutral Count": [int(counts.get("Neutral", 0))],
-                    "Negative Count": [int(counts.get("Negative", 0))],
-                    "Generated At": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-                }
-            )
-            st.download_button(
-                "Click to download summary",
-                data=summary.to_csv(index=False),
-                file_name=f"youtube_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+    counts = df["sentiment"].value_counts()
+    summary = pd.DataFrame(
+        {
+            "Video Title": [data["title"]],
+            "Video ID": [vid],
+            "Total Comments": [len(df)],
+            "Avg Sentiment": [df["sentiment_score"].mean()],
+            "Positive %": [(df["sentiment"] == "Positive").mean() * 100],
+            "Neutral %": [(df["sentiment"] == "Neutral").mean() * 100],
+            "Negative %": [(df["sentiment"] == "Negative").mean() * 100],
+            "Positive Count": [int(counts.get("Positive", 0))],
+            "Neutral Count": [int(counts.get("Neutral", 0))],
+            "Negative Count": [int(counts.get("Negative", 0))],
+            "Generated At": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+        }
+    )
 
-    with c2:
-        if st.button("Download detailed CSV", use_container_width=True):
-            out = df.copy()
-            out["video_id"] = vid
-            out["video_title"] = data["title"]
-            out["analysis_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.download_button(
-                "Click to download detailed",
-                data=out.to_csv(index=False),
-                file_name=f"youtube_detailed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv",
-                use_container_width=True,
-            )
+    detailed = df.copy()
+    detailed["video_id"] = vid
+    detailed["video_title"] = data["title"]
+    detailed["analysis_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    d1, d2 = st.columns(2)
+    with d1:
+        st.markdown("<div class='card'><div style='font-size:16px;font-weight:800;'>Summary export</div><div class='subtitle'>One row per video.</div></div>", unsafe_allow_html=True)
+        st.download_button(
+            "Download summary CSV",
+            data=summary.to_csv(index=False).encode("utf-8"),
+            file_name=f"youtube_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    with d2:
+        st.markdown("<div class='card'><div style='font-size:16px;font-weight:800;'>Detailed export</div><div class='subtitle'>One row per comment.</div></div>", unsafe_allow_html=True)
+        st.download_button(
+            "Download detailed CSV",
+            data=detailed.to_csv(index=False).encode("utf-8"),
+            file_name=f"youtube_detailed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
 st.markdown("")
 st.markdown(
