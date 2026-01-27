@@ -308,6 +308,7 @@ if "current_videos" not in st.session_state:
     st.session_state.current_videos = []
 if "last_activity" not in st.session_state:
     st.session_state.last_activity = datetime.now()
+header[data-testid="stHeader"] { display: none !important; }
 
 def login_screen():
     apply_style(mode="login")
@@ -949,3 +950,4 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
