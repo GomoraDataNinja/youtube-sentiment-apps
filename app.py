@@ -14,11 +14,10 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-APP_VERSION = "2.2.1"
+APP_VERSION = "2.2.0"
 APP_NAME = "YouTube Sentiment Analysis"
 DEPLOYMENT_MODE = os.environ.get("DEPLOYMENT_MODE", "production")
 SESSION_TIMEOUT_MINUTES = 60
-MAX_COMMENTS_PER_VIDEO = 500
 
 st.set_page_config(
     page_title=f"{APP_NAME} v{APP_VERSION}",
@@ -68,15 +67,7 @@ SENTIMENT_COLORS = {
     "Negative": THEME["bad"],
 }
 
-def apply_style(mode="app"):
-    login_mode = (mode == "login")
-    block_display = "flex" if login_mode else "block"
-    block_justify = "center" if login_mode else "initial"
-    block_align = "center" if login_mode else "initial"
-    block_min_h = "100vh" if login_mode else "auto"
-    block_pt = "0rem" if login_mode else "1.6rem"
-    block_pb = "0rem" if login_mode else "2.2rem"
-
+def apply_style():
     st.markdown(
         f"""
         <style>
@@ -95,166 +86,116 @@ def apply_style(mode="app"):
             --neutral: {THEME['neutral']};
         }}
 
-        .stApp {{
-            background: var(--bg);
+        html, body, [data-testid="stAppViewContainer"], .stApp {{
+            background: var(--bg) !important;
+            color: var(--text) !important;
         }}
 
-        /* Lock container spacing so deploy renders the same */
-        [data-testid="stAppViewContainer"] {{
-            background: var(--bg) !important;
+        [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer {{
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
         }}
 
         .block-container {{
-            max-width: 1080px !important;
-            padding-top: {block_pt} !important;
-            padding-bottom: {block_pb} !important;
-
-            display: {block_display} !important;
-            justify-content: {block_justify} !important;
-            align-items: {block_align} !important;
-            min-height: {block_min_h} !important;
+            max-width: 1080px;
+            padding-top: 2.6rem !important;
+            padding-bottom: 2.2rem !important;
         }}
 
-        html, body, [class*="css"] {{
-            color: var(--text) !important;
+        html, body, .stApp, .stMarkdown, .stText, p, span, div, label {{
             font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif !important;
-        }}
-
-        h1, h2, h3, h4, h5, h6,
-        p, span, label, small, li,
-        div, section, header, footer,
-        .stMarkdown, .stCaption, .stText, .stAlert,
-        [data-testid="stMarkdownContainer"] * {{
             color: var(--text) !important;
-            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif !important;
         }}
-
-        .muted, .stCaption {{
-            color: var(--muted) !important;
-        }}
-
-        #MainMenu {{visibility: hidden;}}
-        footer {{visibility: hidden;}}
-        .stDeployButton {{display: none;}}
 
         section[data-testid="stSidebar"] {{
             background: #ffffff !important;
             border-right: 1px solid var(--border) !important;
         }}
-        section[data-testid="stSidebar"] * {{
-            color: var(--text) !important;
-        }}
 
         .card {{
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 18px 18px;
+            background: #ffffff !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 18px !important;
+            padding: 18px 18px !important;
         }}
 
         .card-soft {{
-            background: var(--panel2);
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 18px 18px;
+            background: var(--panel2) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 18px !important;
+            padding: 18px 18px !important;
         }}
 
         .hero {{
-            border: 1px solid var(--border);
-            border-radius: 22px;
-            padding: 26px 22px;
+            border: 1px solid var(--border) !important;
+            border-radius: 22px !important;
+            padding: 26px 22px !important;
             background:
                 radial-gradient(900px 260px at 50% -10%, rgba(215,30,40,0.10), transparent 60%),
-                linear-gradient(180deg, #ffffff, #ffffff);
+                linear-gradient(180deg, #ffffff, #ffffff) !important;
         }}
 
         .title {{
-            font-size: 28px;
-            font-weight: 800;
-            letter-spacing: 0.2px;
-            margin: 0;
+            font-size: 28px !important;
+            font-weight: 800 !important;
+            letter-spacing: 0.2px !important;
+            margin: 0 !important;
         }}
 
         .subtitle {{
-            margin-top: 6px;
+            margin-top: 6px !important;
             color: var(--muted) !important;
-            font-size: 14px;
-            line-height: 1.6;
+            font-size: 14px !important;
+            line-height: 1.6 !important;
         }}
 
         .chip {{
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            border: 1px solid var(--border);
-            background: #ffffff;
-            font-size: 12px;
-            font-weight: 650;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            padding: 6px 12px !important;
+            border-radius: 999px !important;
+            border: 1px solid var(--border) !important;
+            background: #ffffff !important;
+            font-size: 12px !important;
+            font-weight: 650 !important;
             color: var(--muted) !important;
         }}
 
         .chip-dot {{
-            width: 8px;
-            height: 8px;
-            border-radius: 999px;
-            display: inline-block;
-            background: var(--accent);
+            width: 8px !important;
+            height: 8px !important;
+            border-radius: 999px !important;
+            display: inline-block !important;
+            background: var(--accent) !important;
         }}
 
         .metric {{
-            border: 1px solid var(--border);
-            border-radius: 18px;
-            padding: 14px 14px;
-            background: #ffffff;
+            border: 1px solid var(--border) !important;
+            border-radius: 18px !important;
+            padding: 14px 14px !important;
+            background: #ffffff !important;
         }}
 
         .metric-k {{
-            font-size: 12px;
+            font-size: 12px !important;
             color: var(--muted) !important;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.9px;
+            font-weight: 700 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.9px !important;
         }}
 
         .metric-v {{
-            font-size: 26px;
-            font-weight: 850;
-            margin-top: 6px;
+            font-size: 26px !important;
+            font-weight: 850 !important;
+            margin-top: 6px !important;
         }}
 
-        /* Buttons */
-        div.stButton > button {{
-            background: var(--accent) !important;
-            border: 1px solid var(--accent) !important;
-            border-radius: 14px !important;
-            padding: 0.7rem 1rem !important;
-            font-weight: 750 !important;
-            color: #ffffff !important;
+        .muted {{
+            color: var(--muted) !important;
         }}
 
-        div.stButton > button:hover {{
-            background: var(--accent2) !important;
-            border: 1px solid var(--accent2) !important;
-        }}
-
-        /* Inputs */
-        .stTextInput > div > div > input {{
-            background-color: #ffffff !important;
-            border: 1px solid var(--border2) !important;
-            border-radius: 14px !important;
-            color: var(--text) !important;
-        }}
-
-        .stSelectbox > div > div {{
-            background-color: #ffffff !important;
-            border: 1px solid var(--border2) !important;
-            border-radius: 14px !important;
-            color: var(--text) !important;
-        }}
-
-        /* Tabs */
         .stTabs [data-baseweb="tab"] {{
             background: #ffffff !important;
             border: 1px solid var(--border) !important;
@@ -269,20 +210,63 @@ def apply_style(mode="app"):
             border: 1px solid rgba(215,30,40,0.35) !important;
         }}
 
-        /* Dataframe */
-        [data-testid="stDataFrame"] {{
-            background: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            overflow: hidden;
+        div.stButton > button,
+        button[kind="primary"],
+        [data-testid="baseButton-primary"] > button {{
+            background: var(--accent) !important;
+            border: 1px solid var(--accent) !important;
+            border-radius: 14px !important;
+            padding: 0.7rem 1rem !important;
+            font-weight: 750 !important;
+            color: #ffffff !important;
         }}
-        [data-testid="stDataFrame"] * {{
+
+        div.stButton > button:hover,
+        button[kind="primary"]:hover,
+        [data-testid="baseButton-primary"] > button:hover {{
+            background: var(--accent2) !important;
+            border: 1px solid var(--accent2) !important;
+        }}
+
+        div[data-baseweb="input"] > div {{
+            background: #ffffff !important;
+            border: 1px solid var(--border2) !important;
+            border-radius: 14px !important;
+            box-shadow: none !important;
+        }}
+
+        div[data-baseweb="input"] input {{
+            background: transparent !important;
             color: var(--text) !important;
+        }}
+
+        div[data-baseweb="input"] svg {{
+            fill: var(--text) !important;
+        }}
+
+        div[data-baseweb="base-input"] > div {{
+            background: #ffffff !important;
+            border: 1px solid var(--border2) !important;
+            border-radius: 14px !important;
+        }}
+
+        .stTextInput label, .stSelectbox label {{
+            color: var(--text) !important;
+            font-weight: 700 !important;
+        }}
+
+        [data-testid="stDataFrame"] {{
+            background: #ffffff !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 16px !important;
+            overflow: hidden !important;
         }}
         </style>
         """,
         unsafe_allow_html=True,
     )
+
+apply_style()
 
 def touch():
     st.session_state.last_activity = datetime.now()
@@ -310,12 +294,12 @@ if "last_activity" not in st.session_state:
     st.session_state.last_activity = datetime.now()
 
 def login_screen():
-    apply_style(mode="login")
-
-    st.markdown(
-        f"""
-        <div style="width: 440px; max-width: 92vw;">
-            <div class="card">
+    st.markdown('<div style="height: 1.8rem;"></div>', unsafe_allow_html=True)
+    c1, c2, c3 = st.columns([1, 1.25, 1])
+    with c2:
+        st.markdown(
+            f"""
+            <div class="card" style="margin-top: 10vh;">
                 <div class="title">{APP_NAME}</div>
                 <div class="subtitle">
                     Secure. Fast. Easy.<br>
@@ -324,23 +308,21 @@ def login_screen():
                 <div style="height: 14px;"></div>
                 <div class="chip"><span class="chip-dot"></span> Version {APP_VERSION} • {DEPLOYMENT_MODE.title()}</div>
             </div>
-            <div style="height: 12px;"></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+            """,
+            unsafe_allow_html=True,
+        )
 
-    with st.form("login_form", clear_on_submit=True):
-        pw = st.text_input("Password", type="password", placeholder="Organisation password")
-        ok = st.form_submit_button("Sign in", use_container_width=True)
+        with st.form("login_form", clear_on_submit=True):
+            pw = st.text_input("Password", type="password", placeholder="Organisation password")
+            ok = st.form_submit_button("Sign in", use_container_width=True)
 
-    if ok:
-        if pw == ORG_PASSWORD:
-            st.session_state.authenticated = True
-            touch()
-            safe_rerun()
-        else:
-            st.error("Wrong password.")
+        if ok:
+            if pw == ORG_PASSWORD:
+                st.session_state.authenticated = True
+                touch()
+                safe_rerun()
+            else:
+                st.error("Wrong password.")
 
 if st.session_state.authenticated and is_timed_out():
     st.session_state.authenticated = False
@@ -352,7 +334,6 @@ if not st.session_state.authenticated:
     login_screen()
     st.stop()
 
-apply_style(mode="app")
 touch()
 
 def extract_video_id(url):
@@ -379,7 +360,7 @@ def youtube_client():
 
     return build("youtube", "v3", developerKey=api_key)
 
-def get_video_comments(youtube, video_id, max_comments=MAX_COMMENTS_PER_VIDEO):
+def get_video_comments(youtube, video_id, max_comments=500):
     all_comments = []
     next_page_token = None
 
@@ -432,7 +413,7 @@ def fetch_video(video_id, video_url):
             return None
 
         info = vr["items"][0]
-        comments = get_video_comments(yt, video_id, max_comments=MAX_COMMENTS_PER_VIDEO)
+        comments = get_video_comments(yt, video_id, max_comments=500)
 
         if not comments:
             st.error("No comments returned. Comments may be disabled for this video.")
@@ -554,13 +535,13 @@ def sentiment_badge(s):
         font-weight: 700;
         font-size: 12px;
         gap: 8px;
+        color: {THEME['text']};
     ">
         <span style="width:8px;height:8px;border-radius:999px;background:{c};display:inline-block;"></span>
         {s}
     </span>
     """
 
-# Top bar
 top1, top2, top3 = st.columns([3, 1.4, 1])
 with top1:
     st.markdown(
@@ -591,7 +572,6 @@ with top3:
 
 st.markdown("")
 
-# Add video area (simple)
 a1, a2 = st.columns([3, 1])
 with a1:
     video_url = st.text_input("YouTube video URL", placeholder="https://www.youtube.com/watch?v=...")
@@ -616,7 +596,6 @@ with a2:
                         st.success("Video added.")
                         safe_rerun()
 
-# Selected videos (compact)
 if st.session_state.current_videos:
     with st.expander("Selected videos", expanded=False):
         for vid in st.session_state.current_videos:
@@ -632,7 +611,7 @@ if st.session_state.current_videos:
                         del st.session_state.video_data[vid]
                     safe_rerun()
 
-cbtn1, _ = st.columns([1, 5])
+cbtn1, cbtn2 = st.columns([1, 5])
 with cbtn1:
     if st.session_state.current_videos:
         if st.button("Clear all", use_container_width=True):
@@ -657,7 +636,6 @@ if not st.session_state.current_videos:
     )
     st.stop()
 
-# Global metrics
 total_videos = len(st.session_state.current_videos)
 total_comments = 0
 scores = []
@@ -675,20 +653,11 @@ avg_sent = float(np.mean(scores)) if scores else 0.0
 
 m1, m2, m3 = st.columns(3)
 with m1:
-    st.markdown(
-        f"<div class='metric'><div class='metric-k'>Videos</div><div class='metric-v'>{total_videos}</div></div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<div class='metric'><div class='metric-k'>Videos</div><div class='metric-v'>{total_videos}</div></div>", unsafe_allow_html=True)
 with m2:
-    st.markdown(
-        f"<div class='metric'><div class='metric-k'>Comments</div><div class='metric-v'>{total_comments:,}</div></div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<div class='metric'><div class='metric-k'>Comments</div><div class='metric-v'>{total_comments:,}</div></div>", unsafe_allow_html=True)
 with m3:
-    st.markdown(
-        f"<div class='metric'><div class='metric-k'>Avg sentiment</div><div class='metric-v'>{avg_sent:.2f}</div></div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown(f"<div class='metric'><div class='metric-k'>Avg sentiment</div><div class='metric-v'>{avg_sent:.2f}</div></div>", unsafe_allow_html=True)
 
 st.markdown("")
 
@@ -746,6 +715,7 @@ with tabs[0]:
             txt = str(row.get("comment", "")).strip()
             if len(txt) > 180:
                 txt = txt[:180] + "..."
+
             when = row.get("published_at")
             when_txt = ""
             if pd.notna(when):
@@ -753,7 +723,6 @@ with tabs[0]:
 
             badge = sentiment_badge(row["sentiment"])
             likes = int(row.get("like_count", 0) or 0)
-            like_txt = f" • {likes} likes" if likes > 0 else ""
 
             st.markdown(
                 f"""
@@ -764,7 +733,8 @@ with tabs[0]:
                     </div>
                     <div style="margin-top: 10px; font-size: 13px; line-height:1.55;">{txt}</div>
                     <div class="muted" style="margin-top: 8px; font-size:12px;">
-                        {row.get('author','Unknown')}{like_txt}
+                        {row.get('author','Unknown')}
+                        {" • " + str(likes) + " likes" if likes > 0 else ""}
                     </div>
                 </div>
                 """,
@@ -918,9 +888,19 @@ with tabs[3]:
     detailed["video_title"] = data["title"]
     detailed["analysis_timestamp"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    d1, d2 = st.columns(2)
-    with d1:
-        st.markdown("<div class='card'><div style='font-size:16px;font-weight:800;'>Summary export</div><div class='subtitle'>One row per video.</div></div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="card">
+            <div style="font-size:16px; font-weight:800;">Export</div>
+            <div class="subtitle">One-click downloads. No extra buttons.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown("")
+
+    e1, e2 = st.columns(2)
+    with e1:
         st.download_button(
             "Download summary CSV",
             data=summary.to_csv(index=False).encode("utf-8"),
@@ -928,9 +908,7 @@ with tabs[3]:
             mime="text/csv",
             use_container_width=True,
         )
-
-    with d2:
-        st.markdown("<div class='card'><div style='font-size:16px;font-weight:800;'>Detailed export</div><div class='subtitle'>One row per comment.</div></div>", unsafe_allow_html=True)
+    with e2:
         st.download_button(
             "Download detailed CSV",
             data=detailed.to_csv(index=False).encode("utf-8"),
@@ -949,5 +927,3 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-
-
